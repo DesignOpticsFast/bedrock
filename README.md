@@ -23,3 +23,42 @@ Legacy optical tools were designed around GUIs and closed formats. Bedrock flips
 ---
 
 ## Project Layout (planned)
+bedrock/
+core/                 # C++ kernels (ray, wave, tolerancing, optimization)
+api/python/           # Python bindings and high-level helpers
+cli/                  # Command-line tools exposing core primitives
+som/                  # .SOM schema, validators, fixtures
+rosetta/              # Import/export: Zemax, CodeV, etc.
+tests/                # Unit and baseline tests
+docs/                 # Specs, guides, design notes
+
+---
+
+## Relationship to Phoenix & Gaia
+
+- **Phoenix** — a Qt-based GUI/IDE that *uses Bedrock* (separate repo; may be closed-source / paid)  
+- **Gaia** — community hub (docs, tutorials, RFCs for `.SOM`, contribution guides)  
+
+Bedrock aims to be the *foundation layer*; GUIs and workflows can evolve independently on top.
+
+---
+
+## Status
+
+Early days. We’re laying the **.SOM** schema and API contracts first, then bringing up core primitives.
+
+---
+
+## Contributing
+
+We welcome early discussion on `.SOM`, Rosetta, and primitive APIs:
+
+- Open issues and proposals here  
+- Docs & RFCs will live in [`DesignOpticsFast/gaia`](https://github.com/DesignOpticsFast/gaia)  
+- License: **Apache 2.0**
+
+---
+
+## License
+
+Apache License 2.0 © Design Optics Fast LLC
