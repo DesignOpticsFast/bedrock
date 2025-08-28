@@ -1,23 +1,10 @@
-cmake_minimum_required(VERSION 3.20)
+add_library(bedrock_core
+  src/bedrock_math.cpp
+)
 
-project(Bedrock
-  VERSION 0.0.1
-  DESCRIPTION "AI-native optical design core"
-  LANGUAGES CXX)
+target_include_directories(bedrock_core
+  PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
 
-# Use modern C++
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Options
-option(BUILD_TESTING "Build tests" ON)
-
-# Core library
-add_subdirectory(core)
-
-# Tests
-if(BUILD_TESTING)
-  include(CTest)
-  enable_testing()
-  add_subdirectory(tests)
-endif()
+target_compile_features(bedrock_core PUBLIC cxx_std_17)
