@@ -1,42 +1,23 @@
-name: Bedrock CI
+name: AWS Heartbeat (manual)
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  build-and-test:
+  aws:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write
       contents: read
-      id-token: write   # needed only for the AWS step below; harmless otherwise
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build
-        run: cmake --build build --config Release --parallel 2
-
-      - name: Run tests
-        run: ctest --test-dir build --output-on-failure
-
-      # ---- Only run these when the workflow is manually dispatched ----
       - name: Configure AWS credentials (OIDC)
-        if: github.event_name == 'workflow_dispatch'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::260287419934:role/BedrockGitHubActionsRole
           aws-region: us-east-2
 
-      - name: Upload CI heartbeat to S3 (prefix: ci/bedrock/)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Upload CI heartbeat to S3
         run: |
           echo "bedrock CI heartbeat $(date -Is)" > ci.txt
           aws s3 cp ci.txt s3://phoenix-dev-artifacts-us-east-2-mn/ci/bedrock/ci.txt
