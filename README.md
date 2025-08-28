@@ -1,4 +1,4 @@
-# Bedrock — AI-Native Optical Design Core
+# Bedrock — AI-Native Optical Design Core Toolkit
 
 **Bedrock** is a headless, computationally efficient toolkit for optical design.
 It exposes fast, composable primitives (ray tracing, wave optics, tolerancing, optimization)
