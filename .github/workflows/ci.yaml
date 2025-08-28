@@ -1,0 +1,36 @@
+name: Bedrock CI (S3 smoke test)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  s3-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::260287419934:role/BedrockGitHubActionsRole
+          aws-region: us-east-2
+
+      - name: Create test artifact
+        run: |
+          mkdir -p out
+          echo "bedrock OIDC $(date -Is)" > out/bedrock-ci.txt
+
+      - name: Upload to S3 (prefix: ci/bedrock/)
+        run: |
+          aws s3 cp out/bedrock-ci.txt s3://phoenix-dev-artifacts-us-east-2-mn/ci/bedrock/bedrock-ci.txt
+
+      - name: Verify in S3
+        run: |
+          aws s3 ls s3://phoenix-dev-artifacts-us-east-2-mn/ci/bedrock/ | grep bedrock-ci.txt
