@@ -47,6 +47,8 @@ Bedrock aims to be the *foundation layer*; GUIs and workflows can evolve indepen
 
 Early days. We’re laying the **.SOM** schema and API contracts first, then bringing up core primitives.
 
+_This is a PR sanity test. CI + branch protection should block direct pushes to main._
+
 ---
 
 ## Contributing
