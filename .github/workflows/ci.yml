@@ -1,13 +1,27 @@
-name: Bedrock CI - Minimal
+name: Bedrock CI
 
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
-  hello:
+  build-and-test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
     steps:
-      - name: Say hello
-        run: echo "CI wiring OK"
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Run tests
+        run: ctest --test-dir build --output-on-failure
