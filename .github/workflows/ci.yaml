@@ -1,35 +1,43 @@
-name: Bedrock CI (S3 smoke test)
+name: Bedrock CI
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  s3-smoke:
+  build-and-test:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
+      id-token: write     # for optional AWS step below
       contents: read
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: |
+          cmake --build build --config Release -- -j 2
+
+      - name: Run tests
+        run: |
+          ctest --test-dir build --output-on-failure
+
+      # --- Optional: keep your S3 smoke step to prove AWS OIDC works ---
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::260287419934:role/BedrockGitHubActionsRole
           aws-region: us-east-2
 
-      - name: Who am I?
-        run: aws sts get-caller-identity
-
-      - name: Upload test artifact
+      - name: Upload CI heartbeat artifact to S3 (prefix: ci/bedrock/)
         run: |
-          echo "ci test $(date -Is)" > ci.txt
+          echo "bedrock CI heartbeat $(date -Is)" > ci.txt
           aws s3 cp ci.txt s3://phoenix-dev-artifacts-us-east-2-mn/ci/bedrock/ci.txt
-
-      - name: Verify artifact
-        run: aws s3 ls s3://phoenix-dev-artifacts-us-east-2-mn/ci/bedrock/
