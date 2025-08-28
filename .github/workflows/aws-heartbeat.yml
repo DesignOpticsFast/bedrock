@@ -1,0 +1,23 @@
+name: AWS Heartbeat (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  aws:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::260287419934:role/BedrockGitHubActionsRole
+          aws-region: us-east-2
+
+      - name: Upload CI heartbeat to S3 (prefix: ci/bedrock/)
+        run: |
+          echo "bedrock CI heartbeat $(date -Is)" > ci.txt
+          aws s3 cp ci.txt s3://phoenix-dev-artifacts-us-east-2-mn/ci/bedrock/ci.txt
