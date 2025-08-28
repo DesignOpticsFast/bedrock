@@ -11,13 +11,13 @@ jobs:
       contents: read
 
     steps:
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::260287419934:role/BedrockGitHubActionsRole
           aws-region: us-east-2
 
-      - name: Upload CI heartbeat to S3 (prefix: ci/bedrock/)
+      - name: Upload CI heartbeat to S3
         run: |
           echo "bedrock CI heartbeat $(date -Is)" > ci.txt
           aws s3 cp ci.txt s3://phoenix-dev-artifacts-us-east-2-mn/ci/bedrock/ci.txt
