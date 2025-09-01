@@ -1,0 +1,57 @@
+# To get started with Dependabot version updates, you'll need to specify which
+# package ecosystems to update and where the package manifests are located.
+# Please see the documentation for all configuration options:
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # 1) Keep GitHub Actions up-to-date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps(actions)"
+      include: "scope"
+    groups:
+      gha-all:
+        patterns:
+          - "*"
+
+  # 2) Python deps (when requirements.txt or pyproject.toml exists)
+  - package-ecosystem: "pip"
+    directory: "/api/python"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "04:30"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    # Use auto unless you prefer to pin/lock only
+    versioning-strategy: "auto"
+    commit-message:
+      prefix: "deps(python)"
+      include: "scope"
+    # Optional: group minor/patch bumps to reduce PR noise
+    groups:
+      pip-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # 3) Git submodules (only matters if you add any)
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "05:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "deps(submodule)"
