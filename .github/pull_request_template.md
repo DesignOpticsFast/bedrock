@@ -1,19 +1,28 @@
+# Pull Request
+
 ## Summary
-- What does this change do? Why is it needed?
+<!-- Short description of the changes. -->
 
-## Related Issues / RFCs
-- Closes #<issue-id> (if applicable)
-- Links to design notes or RFCs (if any)
+## Related Issue(s) / Milestone
+- Closes #ISSUE_NUMBER  
+- Milestone: `MVP Phase 1 — New Design (TSE)`
 
-## Tests & Benchmarks
-- [ ] Unit tests added/updated
-- [ ] Baselines/benchmarks unchanged or improved
-- Notes:
+## Changes
+- [ ] Bedrock: SOM v0 types  
+- [ ] Bedrock: STEP export  
+- [ ] Bedrock: Engine API for New Design  
+- [ ] Phoenix: Bedrock client adapter  
+- [ ] Phoenix: New Design toolbar button  
+- [ ] Phoenix: STEP viewer  
+- [ ] CI smoke tests  
 
-## AI Assist (provenance)
-- AI used?  [ ] No  [ ] Yes — Tool: (Copilot/Claude/Other)
-- If yes, briefly describe scope (e.g., docstrings, test scaffolding, boilerplate)
+(Check only what applies for this PR.)
 
-## Safety & Licensing
-- [ ] No secrets or proprietary data included
-- [ ] License headers & attributions checked
+## Testing
+- [ ] Local build successful
+- [ ] CI green
+- [ ] Verified STEP file creation
+- [ ] Verified STEP file loads in Phoenix viewer
+
+## Notes
+<!-- Any extra context, design decisions, or follow-ups. -->
