@@ -73,3 +73,7 @@ target_include_directories(bedrock_engine PUBLIC
 
 target_link_libraries(bedrock_engine PUBLIC
   bedrock_geom)  # brings in OCCT + bedrock_som
+
+# --- Sprint 1: smoke (manual run)
+add_executable(bedrock_smoke_step tests/smoke_step_main.cpp)
+target_link_libraries(bedrock_smoke_step PRIVATE bedrock_engine)
