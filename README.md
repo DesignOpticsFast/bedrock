@@ -1,68 +1,84 @@
 # Bedrock — AI-Native Optical Design Core Toolkit
 
-**Bedrock** is a headless, computationally efficient toolkit for optical design.
-It exposes fast, composable primitives (ray tracing, wave optics, tolerancing, optimization)
-for scripting, batch workflows, and AI agents.
+**Bedrock** is the headless, computationally efficient core of the Phoenix platform.  
+It owns the **System Object Model (.SOM)**, performs all calculations, and provides
+fast, composable primitives for ray tracing, wave optics, tolerancing, optimization,
+and future AI-assisted workflows.
 
-- **.SOM** — *System Object Model*: the canonical data contract for optical systems
-- **Rosetta** — translators for legacy formats (Zemax/CodeV/etc.)
-- **APIs** — CLI + Python bindings (C++ core; Python interface)
-
-> Philosophy: **open, modular, AI-first**. GUIs belong in `Phoenix` (a separate project).
+> Philosophy: **open, modular, AI-first**. GUIs belong in `Phoenix` (separate repo).
 
 ---
 
-## Why Bedrock?
+## 🚀 Current Scope (MVP Phase 1)
 
-Legacy optical tools were designed around GUIs and closed formats. Bedrock flips the model:
-- **AI-native**: algorithms callable directly by agents, CI, and pipelines
-- **Scriptable**: first-class CLI/Python interfaces for automation
-- **Interoperable**: `.SOM` as the shared schema; Rosetta for legacy translation
-- **Scalable**: designed for parallel execution (GPU/cluster-friendly)
+Sprint: **MVP Phase 1 — New Design (TSE)**
+
+- Define **SOM v0** with a minimal `SystemModel` and one **Two-Surface Element (TSE)**.
+- Hard-wire default parameters: radii, thickness, diameter, material.
+- Implement **STEP export** for a TSE using OpenCascade.
+- Add Engine API:  
+  `NewDesign_TSE_WriteSTEP(out_dir)`  
+  - Creates canonical SOM with default TSE  
+  - Writes STEP file  
+  - Increments SOM version  
+  - Returns STEP path  
+- Provide CI smoke test: confirm STEP file is generated and valid.
 
 ---
 
-## Project Layout (planned)
+## 📂 Repo Layout (early)
 bedrock/
-core/                 # C++ kernels (ray, wave, tolerancing, optimization)
-api/python/           # Python bindings and high-level helpers
-cli/                  # Command-line tools exposing core primitives
-som/                  # .SOM schema, validators, fixtures
-rosetta/              # Import/export: Zemax, CodeV, etc.
-tests/                # Unit and baseline tests
-docs/                 # Specs, guides, design notes
+├── include/bedrock/          # Public C++ headers
+│    ├── engine.hpp           # Engine API
+│    ├── som/types.hpp        # SOM v0 types
+│    └── geom/step_export.hpp # STEP export
+├── src/
+│    ├── engine/              # Engine implementation
+│    └── geom/                # STEP export implementation
+├── proto/                    # .SOM schema (protobuf)
+├── tests/                    # Unit + CI smoke tests
+└── docs/                     # ADRs, specs, design notes
 
 ---
 
-## Relationship to Phoenix & Gaia
+## 🌐 Relationship to Phoenix & Rosetta
 
-- **Phoenix** — a Qt-based GUI/IDE that *uses Bedrock* (separate repo; may be closed-source / paid)  
-- **Gaia** — community hub (docs, tutorials, RFCs for `.SOM`, contribution guides)  
+- **Phoenix** — Qt GUI/IDE that calls Bedrock APIs. Bedrock never runs a GUI.  
+- **Rosetta** — translators for legacy formats (Zemax/CodeV/Seq) will arrive later, once `.SOM` is stable.  
+- **Gaia** — community hub (docs, tutorials, RFCs for `.SOM`, contribution guides).  
 
-Bedrock aims to be the *foundation layer*; GUIs and workflows can evolve independently on top.
-
----
-
-## Status
-
-Early days. We’re laying the **.SOM** schema and API contracts first, then bringing up core primitives.
-
-_This is a PR sanity test. CI + branch protection should block direct pushes to main._
+Bedrock is the **foundation layer**: Phoenix and Rosetta depend on it.
 
 ---
 
-## Contributing
+## 📈 Roadmap
 
-We welcome early discussion on `.SOM`, Rosetta, and primitive APIs:
-
-- Open issues and proposals here  
-- Docs & RFCs will live in [`DesignOpticsFast/gaia`](https://github.com/DesignOpticsFast/gaia)  
-- License: **Apache 2.0**
+1. **Phase 1 (Now)**: SOM v0, TSE, STEP export, Phoenix integration.  
+2. **Phase 2**: Extend SOM (assemblies, materials, wavelengths).  
+3. **Phase 3**: Core primitives — ray tracing, aberrations, tolerancing.  
+4. **Phase 4**: Python bindings + CLI tools.  
+5. **Phase 5**: GPU/cluster scalability and AI-agent workflows.
 
 ---
 
-## License
+## 🧪 Status
+
+- CI + branch protection enabled (PRs required, build must pass).  
+- `.SOM` schema under active design.  
+- First deliverable: `NewDesign_TSE_WriteSTEP()` + smoke tests.  
+
+---
+
+## 🤝 Contributing
+
+We welcome early feedback and proposals:
+
+- Open issues for `.SOM`, Rosetta, and primitive APIs.  
+- RFCs and design docs will live in [`DesignOpticsFast/gaia`](https://github.com/DesignOpticsFast/gaia).  
+- License: **Apache 2.0**  
+
+---
+
+## 📜 License
 
 Apache License 2.0 © Design Optics Fast LLC
-Minor change added to test build pipeline Set 21 2025 MGN
-Another minor change added to test the build pipeline as it didn't work the first time :-)
