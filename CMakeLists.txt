@@ -21,3 +21,7 @@ if(BUILD_TESTING)
   enable_testing()
   add_subdirectory(tests)
 endif()
+
+# --- Sprint 1: header-only SOM target
+add_library(bedrock_som INTERFACE)
+target_include_directories(bedrock_som INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
