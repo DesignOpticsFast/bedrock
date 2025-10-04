@@ -44,3 +44,4 @@
 
 # debug information files
 *.dwo
+CMakeLists.txt.user
