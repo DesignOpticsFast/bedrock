@@ -8,6 +8,7 @@
 #include <BRepPrimAPI_MakeCylinder.hxx>
 #include <TopoDS_Shape.hxx>
 #include <IFSelect_ReturnStatus.hxx>
+#include <Interface_Static.hxx>
 
 using namespace bedrock;
 
@@ -25,6 +26,10 @@ std::string geom::WriteTSEasSTEP(const som::TwoSurfaceElement& tse,
   TopoDS_Shape solid = BRepPrimAPI_MakeCylinder(r, h).Shape();
 
   STEPControl_Writer writer;
+
+  // Force AP242 (discrete) schema — OCCT recognizes this token
+  Interface_Static::SetCVal("write.step.schema", "AP242DIS");
+
   writer.Transfer(solid, STEPControl_AsIs);
   if (writer.Write(out.string().c_str()) != IFSelect_RetDone) {
     throw std::runtime_error("STEP write failed");
