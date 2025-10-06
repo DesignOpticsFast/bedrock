@@ -1,47 +1,108 @@
-/build/
-# macOS Finder metadata
+# ────────────────────────────────
+#  Bedrock Project Git Ignore
+# ────────────────────────────────
+
+# === Build directories ===
+/build*/
+_build*/
+_bedrock_build*/
+
+# === macOS Finder metadata ===
 .DS_Store
 **/.DS_Store
 
-# Prerequisites
+# === Prerequisites ===
 *.d
 
-# Compiled Object files
+# === Compiled Object files ===
 *.slo
 *.lo
 *.o
 *.obj
 
-# Precompiled Headers
+# === Precompiled Headers ===
 *.gch
 *.pch
 
-# Linker files
+# === Linker / Debug Files ===
 *.ilk
-
-# Debugger Files
 *.pdb
+*.idb
+*.map
+*.exp
 
-# Compiled Dynamic libraries
+# === Compiled Dynamic Libraries ===
 *.so
 *.dylib
 *.dll
 
-# Fortran module files
+# === Fortran module files ===
 *.mod
 *.smod
 
-# Compiled Static libraries
+# === Compiled Static Libraries ===
 *.lai
 *.la
 *.a
 *.lib
 
-# Executables
+# === Executables / Bundles ===
 *.exe
 *.out
 *.app
+*.bin
+*.run
+*.dSYM/
 
-# debug information files
+# === Debug / Profile Info ===
 *.dwo
+*.gcda
+*.gcno
+*.gcov
+
+# === CMake / Ninja / QMake Artifacts ===
+CMakeFiles/
+CMakeCache.txt
+*.cmake
+*.ninja
+*.ninja_deps
+*.ninja_log
+*.make
+Makefile
+*.pro.user
+*.qmake.stash
 CMakeLists.txt.user
+
+# === IDE / OS Metadata ===
+*.user
+*.user.*
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# === Local Development / Cache ===
+.cache/
+.idea/
+.vscode/
+*.code-workspace
+
+# === Project Specific ===
+# Ignore compiled smoke tests, OCCT temp outputs, or generated STEP files
+bedrock_smoke_step
+*.step
+temp/
+logs/
+output/
+dist/
+lib/
+bin/
+coverage/
+
+# Optional: ignore Phoenix sub-builds if they appear inside Bedrock
+_phoenix_build/
