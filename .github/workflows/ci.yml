@@ -21,13 +21,14 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install deps (toolchain + OpenCascade)
+      - name: Install deps (toolchain + OpenCascade + TBB)
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build g++ \
             libocct-foundation-dev libocct-modeling-data-dev \
             libocct-modeling-algorithms-dev libocct-ocaf-dev \
-            libocct-visualization-dev libocct-data-exchange-dev
+            libocct-visualization-dev libocct-data-exchange-dev \
+            libtbb-dev
 
       - name: Configure (CMake + OCCT)
         run: |
