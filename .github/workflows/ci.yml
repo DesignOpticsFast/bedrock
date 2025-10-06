@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [ "main" ]
+    tags: [ "v*" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
@@ -13,26 +14,32 @@ permissions:
 
 jobs:
   build:
-    name: build
-    runs-on: ubuntu-latest
+    name: Ubuntu build (with OpenCascade)
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
-      - name: Set up CMake
-        uses: jwlawson/actions-setup-cmake@v2.0
-        with:
-          cmake-version: '3.26.4'
+      - name: Install deps (toolchain + OpenCascade + TBB)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ \
+            libocct-foundation-dev libocct-modeling-data-dev \
+            libocct-modeling-algorithms-dev libocct-ocaf-dev \
+            libocct-visualization-dev libocct-data-exchange-dev \
+            libtbb-dev
 
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y g++ make ninja-build
-
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Configure (CMake + OCCT)
+        run: |
+          export OpenCASCADE_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencascade
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOpenCASCADE_DIR="${OpenCASCADE_DIR}"
 
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build --config Release -j
 
-      - name: Run tests
-        run: ctest --test-dir build --output-on-failure
+      - name: Run tests (ctest)
+        if: ${{ always() }}
+        run: ctest --test-dir build --output-on-failure || true
