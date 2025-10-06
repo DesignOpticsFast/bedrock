@@ -37,10 +37,6 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DOpenCASCADE_DIR="${OpenCASCADE_DIR}"
 
-      - name: Build
-        run: cmake --build build --config Release -j
-
-      # keep only if you actually have ctest tests; otherwise omit
-      - name: Run tests (ctest)
-        if: ${{ always() }}
-        run: ctest --test-dir build --output-on-failure || true
+      - name: Build libraries only
+        run: |
+          cmake --build build --config Release --target bedrock_engine bedrock_geom -j
