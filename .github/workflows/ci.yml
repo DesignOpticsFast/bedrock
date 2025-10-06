@@ -13,7 +13,7 @@ permissions:
   security-events: write
 
 jobs:
-  build:
+  build:                       # keep this id so the check stays "CI / build"
     name: Ubuntu build (with OpenCascade)
     runs-on: ubuntu-24.04
 
@@ -40,6 +40,7 @@ jobs:
       - name: Build
         run: cmake --build build --config Release -j
 
+      # keep only if you actually have ctest tests; otherwise omit
       - name: Run tests (ctest)
         if: ${{ always() }}
         run: ctest --test-dir build --output-on-failure || true
