@@ -1,0 +1,11 @@
+# UnderLord PR Guard Forbidden Path Test
+# This file is deliberately placed in a protected directory
+# Expected: PR Guard should BLOCK this change
+
+name: UnderLord Test (Should Be Blocked)
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "This workflow should never run - PR Guard should block it"
