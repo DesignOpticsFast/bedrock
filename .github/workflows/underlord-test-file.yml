@@ -1,0 +1,7 @@
+name: UnderLord Test (Should Be Blocked)
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "This should be blocked by PR Guard"
