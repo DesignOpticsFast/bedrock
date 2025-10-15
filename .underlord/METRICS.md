@@ -413,3 +413,5 @@ gh api /repos/{org}/{repo}/actions/runs \
   - Triggered: Manual workflow_dispatch
 
 **Infrastructure certified sprint-ready.**
+| 2025-10-15T21:57:42Z | ip-10-0-8-68 | bedrock | Stage0 | PASS | OCCT=7.9.1 TBB=2021.5 | Build certified with TBB support |
+| 2025-10-15T22:01:29Z | ip-10-0-8-68 | bedrock | Stage0 | PASS | OCCT=7.9.1 TBB=2021.5 | Build certified with TBB support |
