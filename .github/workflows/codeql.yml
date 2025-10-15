@@ -21,7 +21,7 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       - name: Install OCCT dependencies
         run: |
@@ -33,7 +33,7 @@ jobs:
             libtbb-dev
       
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: cpp, python
       
@@ -46,4 +46,4 @@ jobs:
           cmake --build build --config Release --target bedrock_engine bedrock_geom -j
       
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
