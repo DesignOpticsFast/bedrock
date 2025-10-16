@@ -16,8 +16,11 @@ permissions:
 jobs:
   analyze:
     name: CodeQL Analysis
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, dev01, fastpath]
     timeout-minutes: 60
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     
     steps:
       - name: Checkout repository
@@ -25,12 +28,8 @@ jobs:
       
       - name: Install OCCT dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libocct-foundation-dev libocct-modeling-data-dev \
-            libocct-modeling-algorithms-dev libocct-ocaf-dev \
-            libocct-visualization-dev libocct-data-exchange-dev \
-            libtbb-dev
+          sudo dnf update -y
+          sudo dnf install -y opencascade-devel tbb-devel
       
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
@@ -39,7 +38,7 @@ jobs:
       
       - name: Configure and build for CodeQL
         run: |
-          export OpenCASCADE_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencascade
+          export OpenCASCADE_DIR=/usr/lib64/cmake/opencascade
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DOpenCASCADE_DIR="${OpenCASCADE_DIR}"

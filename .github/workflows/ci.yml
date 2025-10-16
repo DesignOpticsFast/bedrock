@@ -15,7 +15,10 @@ permissions:
 jobs:
   build:                       # keep this id so the check stays "CI / build"
     name: Ubuntu build (with OpenCascade)
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux, x64, dev01, fastpath]
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout repo
@@ -23,39 +26,61 @@ jobs:
 
       - name: Install deps (toolchain + OpenCascade + TBB + ccache)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ ccache \
-            libocct-foundation-dev libocct-modeling-data-dev \
-            libocct-modeling-algorithms-dev libocct-ocaf-dev \
-            libocct-visualization-dev libocct-data-exchange-dev \
-            libtbb-dev
+          sudo dnf update -y
+          sudo dnf install -y cmake ninja-build gcc gcc-c++ make ccache \
+            opencascade-devel tbb-devel
 
       - name: Setup ccache dirs
         run: |
-          mkdir -p ~/.cache/ccache
-          echo "CCACHE_DIR=$HOME/.cache/ccache" >> $GITHUB_ENV
+          mkdir -p /var/cache/ccache
+          echo "CCACHE_DIR=/var/cache/ccache" >> $GITHUB_ENV
           echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-
-      - name: ccache cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ccache
-          key: ccache-${{ runner.os }}-${{ matrix.compiler || 'gcc' }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake', '**/CMakePresets.json') }}
-          restore-keys: |
-            ccache-${{ runner.os }}-${{ matrix.compiler || 'gcc' }}-
-            ccache-${{ runner.os }}-
+          sudo chown -R github-runner:github-runner /var/cache/ccache
 
       - name: Configure (CMake + OCCT)
         run: |
-          export OpenCASCADE_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencascade
+          export OpenCASCADE_DIR=/usr/lib64/cmake/opencascade
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DOpenCASCADE_DIR="${OpenCASCADE_DIR}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+      - name: Print tool versions
+        run: |
+          echo "=== Tool Versions ==="
+          gcc --version
+          cmake --version
+          ninja --version
+          ccache --version
+          echo "===================="
+
       - name: Build libraries only
         run: |
           ccache -z
           cmake --build build --config Release --target bedrock_engine bedrock_geom -j
           ccache -s
+
+      - name: Upload CMake logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmake-logs
+          path: |
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
+          retention-days: 7
+
+      - name: Upload ccache stats
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccache-stats
+          path: /var/cache/ccache
+          retention-days: 7
+
+      - name: Post-job cleanup
+        if: always()
+        run: |
+          rm -rf "$HOME/_work" || true
+          ccache --cleanup || true
