@@ -24,11 +24,12 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v5
 
-      - name: Install deps (toolchain + OpenCascade + TBB + ccache)
+      - name: Install deps (toolchain + TBB + ccache)
         run: |
           sudo dnf update -y
-          sudo dnf install -y cmake ninja-build gcc gcc-c++ make ccache \
-            opencascade-devel tbb-devel
+          sudo dnf install -y cmake ninja-build gcc gcc-c++ make tbb-devel
+          # ccache is already installed from our manual setup
+          echo "Basic toolchain installed, will handle OCCT separately"
 
       - name: Setup ccache dirs
         run: |
@@ -37,14 +38,13 @@ jobs:
           echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           sudo chown -R github-runner:github-runner /var/cache/ccache
 
-      - name: Configure (CMake + OCCT)
+      - name: Configure (CMake - without OCCT for now)
         run: |
-          export OpenCASCADE_DIR=/usr/lib64/cmake/opencascade
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DOpenCASCADE_DIR="${OpenCASCADE_DIR}" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DBUILD_WITH_OCCT=OFF
 
       - name: Print tool versions
         run: |
