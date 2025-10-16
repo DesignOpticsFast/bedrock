@@ -38,13 +38,13 @@ jobs:
           echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> $GITHUB_ENV
           sudo chown -R github-runner:github-runner /var/cache/ccache
 
-      - name: Configure (CMake - without OCCT for now)
+      - name: Configure (CMake - engine-only build)
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DBUILD_WITH_OCCT=OFF
+            -DBEDROCK_WITH_OCCT=OFF
 
       - name: Print tool versions
         run: |

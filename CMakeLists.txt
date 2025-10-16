@@ -48,12 +48,14 @@ target_include_directories(bedrock_som
 # Ensure your environment has:
 #   export CMAKE_PREFIX_PATH="/opt/homebrew/opt/opencascade:${CMAKE_PREFIX_PATH}"
 #   export OpenCASCADE_DIR="/opt/homebrew/opt/opencascade/lib/cmake/opencascade-7.9.1"
-find_package(OpenCASCADE)
-if(NOT OpenCASCADE_FOUND)
-  message(WARNING "OpenCASCADE not found - building without OCCT support")
-  set(BUILD_WITH_OCCT OFF)
-else()
+option(BEDROCK_WITH_OCCT "Build Bedrock OCCT components" ON)
+
+if(BEDROCK_WITH_OCCT)
+  find_package(OpenCASCADE REQUIRED)
   set(BUILD_WITH_OCCT ON)
+else()
+  message(STATUS "Building Bedrock without OCCT support")
+  set(BUILD_WITH_OCCT OFF)
 endif()
 
 if(BUILD_WITH_OCCT)
