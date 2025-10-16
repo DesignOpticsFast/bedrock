@@ -78,6 +78,40 @@ Sprint 003 will address CI/CD configuration gaps and properly fix CodeQL archite
 
 **Policy Change:** 2025-10-16: PR Guard updated to allow internal, infra-ci–labeled edits to .github/workflows/ci.yml; retains blocks for .env, secrets, CMakePresets.json.
 
+## Sprint 003b: Polish Pass - Quality Improvements
+**Date:** 2025-10-16
+**Branch:** `sprint/003/polish-pass` (both repos)
+**Status:** Complete
+
+**Goal:** Address quality improvements and refinements based on code review feedback
+
+**Deliverables:**
+- ✅ PR Guard restored with conditional logic for infra-ci labeled PRs
+- ✅ CI workflows enhanced with tool version printing and failure artifacts
+- ✅ CMake toolchain improved with ENABLE_CCACHE option
+- ✅ Documentation updated with dnf commands and improved ccache setup
+- ✅ CCACHE_COMPRESS=1 added for better cache efficiency
+
+**Technical Implementation:**
+- Restored pull_request_target trigger with label detection
+- Added version printing: cmake, ninja, ccache
+- Added failure artifact upload for CMake logs
+- Updated all yum commands to dnf for AL2023 compatibility
+- Added ENABLE_CCACHE option to CMake toolchain files
+
+**Quality Improvements:**
+- Better CI debugging with version information
+- Improved failure diagnostics with artifact uploads
+- More robust CMake configuration with optional ccache
+- Updated documentation for current AL2023 practices
+- Enhanced cache efficiency with compression
+
+**Lessons Learned:**
+- Quality improvements enhance developer experience
+- Proper CI logging speeds up issue diagnosis
+- Documentation accuracy is crucial for new contributors
+- Conditional PR Guard provides security while enabling necessary changes
+
 ---
 
 ## Sprint 007 (Phase 7): Workflow Validation
