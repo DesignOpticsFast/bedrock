@@ -57,11 +57,13 @@ add_library(bedrock_geom
 target_include_directories(bedrock_geom
   PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+  PRIVATE
     ${OpenCASCADE_INCLUDE_DIR})
 
 target_link_libraries(bedrock_geom
   PUBLIC
     bedrock_som
+  PRIVATE
     ${OpenCASCADE_LIBRARIES})
 
 # ---------------------------------------
@@ -77,6 +79,35 @@ target_include_directories(bedrock_engine PUBLIC
 
 target_link_libraries(bedrock_engine PUBLIC
   bedrock_geom)  # brings in OCCT + bedrock_som
+
+# ---------------------------------------
+# Plugin interface for external consumers (like Phoenix)
+# ---------------------------------------
+# This provides a clean interface without exposing OCCT dependencies
+add_library(bedrock_plugin
+  include/bedrock/plugin_interface.hpp
+  src/plugin/plugin_interface.cpp)
+
+target_include_directories(bedrock_plugin PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# Plugin depends on engine (which has OCCT) but doesn't expose it
+target_link_libraries(bedrock_plugin PRIVATE
+  bedrock_engine)
+
+# ---------------------------------------
+# Clean SDK interface for external consumers (like Phoenix)
+# ---------------------------------------
+# This provides a clean interface without exposing OCCT dependencies
+add_library(bedrock_sdk INTERFACE)
+
+# Only expose public headers, not OCCT internals
+target_include_directories(bedrock_sdk INTERFACE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# Link to bedrock_som (header-only) but NOT bedrock_geom (which has OCCT)
+target_link_libraries(bedrock_sdk INTERFACE
+  bedrock_som)
 
 # --- Sprint 1: smoke (manual run)
 add_executable(bedrock_smoke_step tests/smoke_step_main.cpp)
