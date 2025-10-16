@@ -12,10 +12,6 @@ permissions:
   contents: read
   security-events: write
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:                       # keep this id so the check stays "CI / build"
     name: Ubuntu build (with OpenCascade)
@@ -49,12 +45,6 @@ jobs:
             ccache-${{ runner.os }}-${{ matrix.compiler || 'gcc' }}-
             ccache-${{ runner.os }}-
 
-      - name: Print tool versions
-        run: |
-          cmake --version
-          ninja --version
-          ccache --version
-
       - name: Configure (CMake + OCCT)
         run: |
           export OpenCASCADE_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencascade
@@ -69,15 +59,3 @@ jobs:
           ccache -z
           cmake --build build --config Release --target bedrock_engine bedrock_geom -j
           ccache -s
-
-      - name: Generate ccache stats
-        run: |
-          ccache -s > ccache-stats.txt
-
-      - name: Upload ccache stats
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: ccache-stats
-          path: ccache-stats.txt
-          retention-days: 7

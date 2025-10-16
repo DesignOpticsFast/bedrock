@@ -89,7 +89,6 @@ This balances efficiency, safety, quality, and learning.
 - Only allows modification of `ci.yml` workflow
 - All other `.github/**` files remain protected
 - `.env`, `secrets`, `CMakePresets.json` remain blocked
-- Fork PRs remain blocked by default
 
 ---
 
