@@ -21,22 +21,41 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install deps (toolchain + OpenCascade + TBB)
+      - name: Install deps (toolchain + OpenCascade + TBB + ccache)
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ \
+          sudo apt-get install -y cmake ninja-build g++ ccache \
             libocct-foundation-dev libocct-modeling-data-dev \
             libocct-modeling-algorithms-dev libocct-ocaf-dev \
             libocct-visualization-dev libocct-data-exchange-dev \
             libtbb-dev
+
+      - name: Setup ccache dirs
+        run: |
+          mkdir -p ~/.cache/ccache
+          echo "CCACHE_DIR=$HOME/.cache/ccache" >> $GITHUB_ENV
+          echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+
+      - name: ccache cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ matrix.compiler || 'gcc' }}-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake', '**/CMakePresets.json') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ matrix.compiler || 'gcc' }}-
+            ccache-${{ runner.os }}-
 
       - name: Configure (CMake + OCCT)
         run: |
           export OpenCASCADE_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencascade
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DOpenCASCADE_DIR="${OpenCASCADE_DIR}"
+            -DOpenCASCADE_DIR="${OpenCASCADE_DIR}" \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build libraries only
         run: |
+          ccache -z
           cmake --build build --config Release --target bedrock_engine bedrock_geom -j
+          ccache -s
