@@ -35,6 +35,7 @@ jobs:
           mkdir -p ~/.cache/ccache
           echo "CCACHE_DIR=$HOME/.cache/ccache" >> $GITHUB_ENV
           echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> $GITHUB_ENV
+          echo "CCACHE_COMPRESS=1" >> $GITHUB_ENV
 
       - name: ccache cache
         uses: actions/cache@v4
@@ -44,6 +45,12 @@ jobs:
           restore-keys: |
             ccache-${{ runner.os }}-${{ matrix.compiler || 'gcc' }}-
             ccache-${{ runner.os }}-
+
+      - name: Print tool versions
+        run: |
+          cmake --version
+          ninja --version
+          ccache --version
 
       - name: Configure (CMake + OCCT)
         run: |
@@ -59,3 +66,12 @@ jobs:
           ccache -z
           cmake --build build --config Release --target bedrock_engine bedrock_geom -j
           ccache -s
+
+      - name: Upload CMake logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmake-logs
+          path: |
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
