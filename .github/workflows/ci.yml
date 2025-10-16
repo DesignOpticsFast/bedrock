@@ -58,7 +58,7 @@ jobs:
       - name: Build libraries only
         run: |
           ccache -z
-          cmake --build build --config Release --target bedrock_engine bedrock_geom -j
+          cmake --build build --config Release --target bedrock_engine -j
           ccache -s
 
       - name: Upload CMake logs (on failure)
