@@ -48,23 +48,35 @@ target_include_directories(bedrock_som
 # Ensure your environment has:
 #   export CMAKE_PREFIX_PATH="/opt/homebrew/opt/opencascade:${CMAKE_PREFIX_PATH}"
 #   export OpenCASCADE_DIR="/opt/homebrew/opt/opencascade/lib/cmake/opencascade-7.9.1"
-find_package(OpenCASCADE REQUIRED)
+option(BEDROCK_WITH_OCCT "Build Bedrock OCCT components" ON)
 
-add_library(bedrock_geom
-  include/bedrock/geom/step_export.hpp
-  src/geom/step_export.cpp)
+if(BEDROCK_WITH_OCCT)
+  find_package(OpenCASCADE REQUIRED)
+  set(BUILD_WITH_OCCT ON)
+else()
+  message(STATUS "Building Bedrock without OCCT support")
+  set(BUILD_WITH_OCCT OFF)
+endif()
 
-target_include_directories(bedrock_geom
-  PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-  PRIVATE
-    ${OpenCASCADE_INCLUDE_DIR})
+if(BUILD_WITH_OCCT)
+  add_library(bedrock_geom
+    include/bedrock/geom/step_export.hpp
+    src/geom/step_export.cpp)
 
-target_link_libraries(bedrock_geom
-  PUBLIC
-    bedrock_som
-  PRIVATE
-    ${OpenCASCADE_LIBRARIES})
+  target_include_directories(bedrock_geom
+    PUBLIC
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE
+      ${OpenCASCADE_INCLUDE_DIR})
+
+  target_link_libraries(bedrock_geom
+    PUBLIC
+      bedrock_som
+    PRIVATE
+      ${OpenCASCADE_LIBRARIES})
+else()
+  message(STATUS "Skipping bedrock_geom library - OpenCASCADE not available")
+endif()
 
 # ---------------------------------------
 # (Next step will add bedrock_engine target)

@@ -16,34 +16,33 @@ permissions:
 jobs:
   analyze:
     name: CodeQL Analysis
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, dev01, fastpath]
     timeout-minutes: 60
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
       
-      - name: Install OCCT dependencies
+      - name: Install dependencies (no OCCT for CodeQL)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libocct-foundation-dev libocct-modeling-data-dev \
-            libocct-modeling-algorithms-dev libocct-ocaf-dev \
-            libocct-visualization-dev libocct-data-exchange-dev \
-            libtbb-dev
+          sudo dnf update -y
+          sudo dnf install -y tbb-devel
+          # Note: OCCT not available in AL2023 - CodeQL will analyze without OCCT
       
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4
         with:
           languages: cpp, python
       
-      - name: Configure and build for CodeQL
+      - name: Configure and build for CodeQL (no OCCT)
         run: |
-          export OpenCASCADE_DIR=/usr/lib/x86_64-linux-gnu/cmake/opencascade
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DOpenCASCADE_DIR="${OpenCASCADE_DIR}"
-          cmake --build build --config Release --target bedrock_engine bedrock_geom -j
+            -DBEDROCK_WITH_OCCT=OFF
+          cmake --build build --config Release --target bedrock_engine -j
       
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v4

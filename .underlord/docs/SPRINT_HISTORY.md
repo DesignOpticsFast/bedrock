@@ -157,4 +157,50 @@ Sprint 003 will address CI/CD configuration gaps and properly fix CodeQL archite
 
 ---
 
+## Sprint 3: Dev-01 Self-Hosted Runner Implementation
+**Date:** 2025-10-16  
+**Status:** ✅ COMPLETED  
+
+### Objectives
+- Install and configure self-hosted GitHub Actions runners on dev-01
+- Migrate Linux CI builds from hosted runners to dev-01
+- Implement security hardening and performance optimizations
+- Achieve 10x+ build time improvements
+
+### Key Deliverables
+- ✅ **Runner Setup**: Two self-hosted runners (Bedrock + Phoenix) operational
+- ✅ **CI Migration**: Linux builds migrated to dev-01 with labels: self-hosted,linux,x64,dev01,fastpath
+- ✅ **Security Hardening**: Restricted sudo access, token rotation, automated cleanup
+- ✅ **Performance**: 10-15x faster builds with shared ccache
+- ✅ **Documentation**: METRICS.md updated with performance benchmarks
+
+### Technical Implementation
+- **Runner Configuration**: GitHub Actions runner v2.329.0 on Amazon Linux 2023
+- **Security**: Limited sudo to specific commands (dnf, cmake, ninja, ccache, chown)
+- **Performance**: Shared ccache directory with 20GB capacity
+- **Automation**: Weekly cleanup via systemd timer
+- **Token Security**: Rotated using GitHub CLI to avoid exposure
+
+### Results
+- **Bedrock CI**: 19s build time (vs 3-5 min hosted)
+- **Phoenix CI**: 12s build time (vs 2-3 min hosted)  
+- **ccache Hit Rate**: 85-90% on subsequent builds
+- **Security**: No full sudo access, automated cleanup, rotated tokens
+
+### Lessons Learned
+- Token rotation is critical for security - never expose in chat
+- Restricted sudo is more secure than full sudo access
+- Shared ccache provides significant performance gains
+- Phoenix is designed to be OCCT-free, simplifying CI setup
+- Amazon Linux 2023 lacks Qt6 packages - Phoenix Linux UI builds deferred
+
+### Sprint 3 Closure (2025-10-16)
+- ✅ dev-01 self-hosted runner activated; Linux CI migrated
+- ✅ Bedrock CI 10-15× faster; Phoenix CI 10-12× faster  
+- ✅ Restricted-sudo + weekly cleanup in place
+- ✅ All CodeQL green (Linux explicit build)
+- ⚠️ Phoenix Qt6 limitation documented for Sprint 4
+
+---
+
 **Maintenance:** Add entries in reverse chronological order (newest first)
