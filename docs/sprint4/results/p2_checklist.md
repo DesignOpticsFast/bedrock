@@ -17,6 +17,7 @@
 - **Status:** ✅ ACHIEVED
 - **Implementation:** QtGraphsPlotView with optimized rendering and downsampling
 - **Performance:** Local computation fallback ensures immediate results
+- **OpenMP Integration:** High-performance parallel computation with automatic optimization
 
 ### Cancel Responsiveness
 - **Target:** Cancel to CANCELLING transition < 200 ms

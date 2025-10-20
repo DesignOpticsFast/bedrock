@@ -21,6 +21,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(BUILD_TESTING "Build tests" ON)
 
 # ---------------------------------------
+# OpenMP for multithreading
+# ---------------------------------------
+find_package(OpenMP REQUIRED)
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
+    message(STATUS "OpenMP flags: ${OpenMP_CXX_FLAGS}")
+else()
+    message(FATAL_ERROR "OpenMP not found - required for multithreading support")
+endif()
+
+# ---------------------------------------
 # Core library (existing project layout)
 # ---------------------------------------
 # Keep your existing core sources/tests structure intact.
