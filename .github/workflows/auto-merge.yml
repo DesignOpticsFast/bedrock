@@ -11,11 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Auto-merge PR
-<<<<<<< HEAD
         uses: actions/github-script@v7
-=======
-        uses: actions/github-script@v8
->>>>>>> 423b232bd7f662d21bec87737d30c09c81946747
         with:
           script: |
             const { data: pr } = await github.rest.pulls.get({
@@ -63,4 +59,5 @@ jobs:
             } else {
               console.log('Required checks not yet passing, waiting...');
             }
+
 
