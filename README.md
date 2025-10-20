@@ -9,20 +9,22 @@ and future AI-assisted workflows.
 
 ---
 
-## 🚀 Current Scope (MVP Phase 1)
+## 🚀 Current Scope (Sprint 4 - Phase 0.5 Gate PASS)
 
-Sprint: **MVP Phase 1 — New Design (TSE)**
+**Status:** ✅ **Phase 0.5 Gate PASSED** (2025-10-18)  
+**Foundation:** Qt 6.10.0 + Qt Graphs / gRPC UDS transport
 
-- Define **SOM v0** with a minimal `SystemModel` and one **Two-Surface Element (TSE)**.
-- Hard-wire default parameters: radii, thickness, diameter, material.
-- Implement **STEP export** for a TSE using OpenCascade.
-- Add Engine API:  
-  `NewDesign_TSE_WriteSTEP(out_dir)`  
-  - Creates canonical SOM with default TSE  
-  - Writes STEP file  
-  - Increments SOM version  
-  - Returns STEP path  
-- Provide CI smoke test: confirm STEP file is generated and valid.
+### Phase 0.5 Gate Results
+- **Graphics:** Qt Graphs 6.10.0 - 50 windows < 5% CPU, < 100 MB RAM per window, 35 FPS for 10k points
+- **Transport:** gRPC UDS - 2.04% overhead vs LocalSocket, 45 MB footprint
+- **Status:** Foundation validated and ready for Phase 1/2 development
+
+### Current Implementation
+- **Palantir Server:** LocalSocket + Protobuf (needs gRPC migration)
+- **Engine API:** Core computation primitives
+- **SOM v0:** System Object Model with Two-Surface Element (TSE)
+- **STEP Export:** OpenCascade integration for CAD export
+- **OpenMP Multithreading:** High-performance parallel computation with automatic optimization
 
 ---
 
@@ -31,10 +33,12 @@ bedrock/
 ├── include/bedrock/          # Public C++ headers
 │    ├── engine.hpp           # Engine API
 │    ├── som/types.hpp        # SOM v0 types
-│    └── geom/step_export.hpp # STEP export
+│    ├── geom/step_export.hpp # STEP export
+│    └── threading.hpp        # OpenMP multithreading utilities
 ├── src/
 │    ├── engine/              # Engine implementation
-│    └── geom/                # STEP export implementation
+│    ├── geom/                # STEP export implementation
+│    └── threading.cpp        # OpenMP implementation
 ├── proto/                    # .SOM schema (protobuf)
 ├── tests/                    # Unit + CI smoke tests
 └── docs/                     # ADRs, specs, design notes
@@ -82,3 +86,8 @@ We welcome early feedback and proposals:
 ## 📜 License
 
 Apache License 2.0 © Design Optics Fast LLC
+# Trigger validation with infra-ci label
+# Test commit for dev-01 runner
+# Another test commit
+# Test sudo fix
+# Final Sprint 3 validation

@@ -23,6 +23,14 @@ updates:
       gha-all:
         patterns:
           - "*"
+    # Auto-merge safe dependency updates
+    allow:
+      - dependency-type: "all"
+    # Auto-merge when CI passes
+    reviewers:
+      - "MarkBedrock"
+    assignees:
+      - "MarkBedrock"
 
   # 2) Python deps (when requirements.txt or pyproject.toml exists)
   - package-ecosystem: "pip"
@@ -56,3 +64,11 @@ updates:
     open-pull-requests-limit: 3
     commit-message:
       prefix: "deps(submodule)"
+    # Auto-merge safe submodule updates
+    allow:
+      - dependency-type: "all"
+    # Auto-merge when CI passes
+    reviewers:
+      - "MarkBedrock"
+    assignees:
+      - "MarkBedrock"

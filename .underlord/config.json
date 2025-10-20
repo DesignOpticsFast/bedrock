@@ -1,0 +1,43 @@
+{
+  "project": "bedrock",
+  "description": "Core optics calculation library with OpenCASCADE integration",
+  "autonomy_level": "high",
+  "engine": "claude-sonnet-4-5",
+  "branch_conventions": {
+    "prefix": "sprint-",
+    "format": "sprint-{number}-{slug}",
+    "examples": ["sprint-002-lens-calculator", "sprint-003-surface-analysis"]
+  },
+  "requires_human_approval": [
+    "merge",
+    "breaking-changes",
+    "dependency-updates"
+  ],
+  "build_system": {
+    "type": "CMake",
+    "generator": "Ninja",
+    "presets": ["dev", "release"],
+    "test_command": "ctest --test-dir build --output-on-failure"
+  },
+  "ci": {
+    "required_checks": [
+      "validate",
+      "Ubuntu build (with OpenCascade)",
+      "CodeQL Analysis"
+    ],
+    "timeout_minutes": 15
+  },
+  "dependencies": [
+    "OCCT",
+    "GoogleTest"
+  ],
+  "code_standards": {
+    "cpp_version": "17",
+    "namespace": "bedrock",
+    "naming_convention": "snake_case for functions, PascalCase for classes"
+  },
+  "documentation": {
+    "changelog": "CHANGELOG.md",
+    "sprint_history": ".underlord/docs/SPRINT_HISTORY.md"
+  }
+}
