@@ -494,3 +494,4 @@ void PalantirServer::parseIncomingData(QLocalSocket* client)
 
 
 
+

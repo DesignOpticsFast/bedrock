@@ -40,3 +40,4 @@ else
     echo "❌ Dependabot branch not found"
     exit 1
 fi
+

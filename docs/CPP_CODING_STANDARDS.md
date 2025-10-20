@@ -352,3 +352,4 @@ Use appropriate compiler flags:
 - **Follow naming conventions** consistently
 
 These standards ensure high-performance, maintainable C++ code with optimal OpenMP integration for Bedrock's computational requirements.
+

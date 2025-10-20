@@ -1,5 +1,12 @@
 # Bedrock — AI-Native Optical Design Core Toolkit
 
+[![CI](https://github.com/DesignOpticsFast/bedrock/actions/workflows/ci.yml/badge.svg)](https://github.com/DesignOpticsFast/bedrock/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/DesignOpticsFast/bedrock/actions/workflows/codeql.yml/badge.svg)](https://github.com/DesignOpticsFast/bedrock/actions/workflows/codeql.yml)
+[![PR Guard](https://github.com/DesignOpticsFast/bedrock/actions/workflows/pr-guard.yml/badge.svg)](https://github.com/DesignOpticsFast/bedrock/actions/workflows/pr-guard.yml)
+[![Auto-merge Dependabot](https://github.com/DesignOpticsFast/bedrock/actions/workflows/auto-merge-dependabot.yml/badge.svg)](https://github.com/DesignOpticsFast/bedrock/actions/workflows/auto-merge-dependabot.yml)
+
+📋 **[Workflow Dependencies](docs/workflow-dependencies.md)** | 🔧 **[Development Setup](docs/dev-setup.md)** | 📚 **[API Documentation](docs/engine-api.md)**
+
 **Bedrock** is the headless, computationally efficient core of the Phoenix platform.  
 It owns the **System Object Model (.SOM)**, performs all calculations, and provides
 fast, composable primitives for ray tracing, wave optics, tolerancing, optimization,
