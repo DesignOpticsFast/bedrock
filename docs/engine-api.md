@@ -13,6 +13,8 @@
   - `Result(JobId, payload, meta)`
   - `Error(JobId, code, reason)`
 - Cancellation tokens checked between batches.
+- **OpenMP multithreading**: Automatic parallelization for compute-intensive operations
+- **Performance optimization**: System-optimal thread count and batch sizing
 
 ## Types
 - `SomSnapshot` and `SomDelta` come from Rosetta (proto-backed).

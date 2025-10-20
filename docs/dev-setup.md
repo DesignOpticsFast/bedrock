@@ -14,6 +14,10 @@ sudo dnf update -y
 sudo dnf install -y gcc gcc-c++ cmake ninja-build git \
   mesa-libGL-devel libglvnd-devel unzip xz tar
 
+Install OpenMP for multithreading support:
+
+sudo dnf install -y libgomp-devel
+
 If AWS CLI v2 is missing:
 
 cd /tmp

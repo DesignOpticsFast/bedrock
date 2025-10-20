@@ -15,8 +15,9 @@
 ### First Paint Performance
 - **Target:** First paint after data arrival ≤ 200 ms on realistic datasets
 - **Status:** ✅ ACHIEVED
-- **Implementation:** QtChartsPlotView with optimized rendering and downsampling
+- **Implementation:** QtGraphsPlotView with optimized rendering and downsampling
 - **Performance:** Local computation fallback ensures immediate results
+- **OpenMP Integration:** High-performance parallel computation with automatic optimization
 
 ### Cancel Responsiveness
 - **Target:** Cancel to CANCELLING transition < 200 ms
