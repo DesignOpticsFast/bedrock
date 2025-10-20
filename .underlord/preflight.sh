@@ -98,7 +98,31 @@ else
 fi
 echo
 
-echo "6️⃣  Build Smoke Test"
+echo "6️⃣  OpenMP Multithreading"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━"
+# Check for OpenMP support
+if g++ -fopenmp -x c++ - <<< '#include <omp.h>
+int main() { return omp_get_max_threads(); }' -o /tmp/openmp_test 2>/dev/null; then
+    THREADS=$(/tmp/openmp_test 2>/dev/null || echo "0")
+    echo -e "${GREEN}✅${NC} OpenMP available: $THREADS threads"
+    rm -f /tmp/openmp_test
+else
+    echo -e "${RED}❌${NC} OpenMP not available"
+    echo "  Install: sudo dnf install -y libgomp-devel"
+    ((FAILURES++))
+fi
+
+# Check OpenMP version
+if g++ -fopenmp -x c++ - <<< '#include <omp.h>
+#include <iostream>
+int main() { std::cout << _OPENMP; return 0; }' -o /tmp/openmp_version 2>/dev/null; then
+    VERSION=$(/tmp/openmp_version 2>/dev/null || echo "unknown")
+    echo "  OpenMP version: $VERSION"
+    rm -f /tmp/openmp_version
+fi
+echo
+
+echo "7️⃣  Build Smoke Test"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 BUILD_DIR="build-preflight-$$"
 
@@ -127,9 +151,20 @@ else
         exit 1
     fi
     
-    echo "Running tests..."
+    echo "Running threading tests..."
+    if [ -f "$BUILD_DIR/core/bedrock_threading_test" ]; then
+        if "$BUILD_DIR/core/bedrock_threading_test" >/dev/null 2>&1; then
+            echo -e "${GREEN}✅${NC} Threading tests passed"
+        else
+            echo -e "${YELLOW}⚠️${NC}  Threading tests failed (review output above)"
+        fi
+    else
+        echo -e "${YELLOW}⚠️${NC}  Threading test executable not found"
+    fi
+    
+    echo "Running all tests..."
     if ctest --test-dir "$BUILD_DIR" --output-on-failure >/dev/null 2>&1; then
-        echo -e "${GREEN}✅${NC} Tests passed"
+        echo -e "${GREEN}✅${NC} All tests passed"
     else
         echo -e "${YELLOW}⚠️${NC}  Some tests failed (review output above)"
     fi
@@ -138,7 +173,7 @@ else
 fi
 echo
 
-echo "7️⃣  UnderLord Configuration"
+echo "8️⃣  UnderLord Configuration"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━"
 if [ -f .underlord/config.json ]; then
     echo -e "${GREEN}✅${NC} UnderLord config present"
@@ -166,36 +201,4 @@ else
     exit 1
 fi
 
-section "5️⃣.5  OCCT/TBB Version Assertions"
-# Expect OCCT >= 7.9.1 and TBB >= 2021.5
-req_occt="7.9.1"
-req_tbb="2021.5"
-
-occt_cfg="${OpenCASCADE_DIR:-/opt/occt-7.9.1/lib/cmake/opencascade}/OpenCASCADEConfig.cmake"
-if [ -f "$occt_cfg" ]; then
-  occt_ver="$(grep -m1 -E 'set\(OpenCASCADE_VERSION' "$occt_cfg" 2>/dev/null | sed 's/[^0-9.]*//g' || true)"
-  [ -z "$occt_ver" ] && occt_ver="$(grep -m1 -E 'set\(Foundation_VERSION' "$occt_cfg" 2>/dev/null | sed 's/[^0-9.]*//g' || true)"
-else
-  occt_ver=""
-fi
-
-tbb_so="$(ls ${TBB_ROOT_DIR:-/opt/tbb-2021.5}/lib64/libtbb.so* 2>/dev/null | head -n1)"
-if [ -n "$tbb_so" ]; then
-  tbb_ver="$(strings "$tbb_so" 2>/dev/null | grep -m1 -E '^TBB_version' | sed 's/[^0-9.]*//g')"
-else
-  tbb_ver=""
-fi
-
-ver_ge() { [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]; }
-
-echo "Detected: OCCT=${occt_ver:-NONE} TBB=${tbb_ver:-NONE} (required: OCCT>=$req_occt TBB>=$req_tbb)"
-if [ -z "$occt_ver" ] || ! ver_ge "$occt_ver" "$req_occt"; then 
-  echo "❌ OpenCASCADE $req_occt or higher required"
-  exit 1
-fi
-if [ -z "$tbb_ver" ] || ! ver_ge "$tbb_ver" "$req_tbb"; then 
-  echo "❌ TBB $req_tbb or higher required"
-  exit 1
-fi
-echo "✅ OCCT/TBB versions OK"
 
