@@ -50,3 +50,4 @@ git pull origin main
 
 echo "✅ Local main branch updated"
 echo "🎉 Auto-merge complete!"
+

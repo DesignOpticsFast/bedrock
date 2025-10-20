@@ -24,6 +24,7 @@ and future AI-assisted workflows.
 - **Engine API:** Core computation primitives
 - **SOM v0:** System Object Model with Two-Surface Element (TSE)
 - **STEP Export:** OpenCascade integration for CAD export
+- **OpenMP Multithreading:** High-performance parallel computation with automatic optimization
 
 ---
 
@@ -32,10 +33,12 @@ bedrock/
 ├── include/bedrock/          # Public C++ headers
 │    ├── engine.hpp           # Engine API
 │    ├── som/types.hpp        # SOM v0 types
-│    └── geom/step_export.hpp # STEP export
+│    ├── geom/step_export.hpp # STEP export
+│    └── threading.hpp        # OpenMP multithreading utilities
 ├── src/
 │    ├── engine/              # Engine implementation
-│    └── geom/                # STEP export implementation
+│    ├── geom/                # STEP export implementation
+│    └── threading.cpp        # OpenMP implementation
 ├── proto/                    # .SOM schema (protobuf)
 ├── tests/                    # Unit + CI smoke tests
 └── docs/                     # ADRs, specs, design notes
