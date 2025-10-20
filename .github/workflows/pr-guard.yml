@@ -48,4 +48,4 @@ jobs:
           else
             REGEX='^(.github/(?!workflows/pr-guard\.yml).+|.*\.env.*|.*secrets.*|CMakePresets\.json)$'
           fi
-          awk -v re="$REGEX" 'match($0,re){print "Forbidden:", $0; bad=1} END{exit bad}' changed.txt
+          awk -v re="$REGEX" 'match($0,re){print "Forbidden:", $0; bad=1} END{exit bad}' changed.txt# Workflow fix applied
