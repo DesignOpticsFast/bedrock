@@ -91,3 +91,4 @@ Apache License 2.0 © Design Optics Fast LLC
 # Another test commit
 # Test sudo fix
 # Final Sprint 3 validation
+# Smoke test for PR Guard workflow
