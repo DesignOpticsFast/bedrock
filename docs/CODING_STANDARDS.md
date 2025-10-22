@@ -1,15 +1,70 @@
 # Coding Standards - Bedrock (Python/Backend)
 
-**Version:** 1.0.0  
-**Last Updated:** 2025-01-14  
+**Version:** 2.0.0  
+**Last Updated:** 2025-01-21  
 **Language:** Python 3.11+  
-**Framework:** FastAPI
+**Framework:** FastAPI  
+**Development Environment:** dev-01 (Primary) + Local Machines (Secondary)
 
 ---
 
 ## Core Principles
 
-### 1. Clarity Over Cleverness
+### 1. Development Environment First
+**ALL CODE CHANGES MUST BE DONE ON DEV-01 FIRST**
+- ✅ Build and test on dev-01 before local development
+- ✅ Use Tailscale for secure connection to dev-01
+- ✅ Test functionality on dev-01
+- ✅ Debug issues on dev-01
+- ✅ Commit changes from dev-01
+
+---
+
+## Development Workflow
+
+### **Phase 1: Development on dev-01**
+```bash
+# Connect to dev-01 via Tailscale
+ssh -i ~/.ssh/github_phoenix mark@100.97.54.75
+cd /home/ec2-user/workspace/bedrock
+
+# Make code changes
+# Test build
+mkdir -p build && cd build
+cmake .. -G Ninja
+ninja -k0
+
+# Run tests
+ctest --output-on-failure
+
+# Commit and push
+git add .
+git commit -m "feat(core): add new feature"
+git push origin feature-branch
+```
+
+### **Phase 2: Local Machine Testing**
+```bash
+# On local machine
+git pull origin feature-branch
+
+# Build and test locally
+mkdir -p build && cd build
+cmake .. -G Ninja
+ninja -k0
+./bedrock_app
+```
+
+### **Key Requirements**
+- ✅ **All changes on dev-01 first**
+- ✅ **Test functionality on dev-01**
+- ✅ **Debug issues on dev-01**
+- ✅ **Commit from dev-01**
+- ✅ **Test locally after sync**
+
+---
+
+### 2. Clarity Over Cleverness
 Write code that your future self (and others) can understand without a PhD in Python wizardry.
 
 **Good:**
