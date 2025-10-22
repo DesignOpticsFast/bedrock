@@ -5,7 +5,7 @@
 [![PR Guard](https://github.com/DesignOpticsFast/bedrock/actions/workflows/pr-guard.yml/badge.svg)](https://github.com/DesignOpticsFast/bedrock/actions/workflows/pr-guard.yml)
 [![Auto-merge Dependabot](https://github.com/DesignOpticsFast/bedrock/actions/workflows/auto-merge-dependabot.yml/badge.svg)](https://github.com/DesignOpticsFast/bedrock/actions/workflows/auto-merge-dependabot.yml)
 
-📋 **[Workflow Dependencies](docs/workflow-dependencies.md)** | 🔧 **[Development Setup](docs/dev-setup.md)** | 📚 **[API Documentation](docs/engine-api.md)**
+📋 **[Workflow Dependencies](docs/workflow-dependencies.md)** | 🔧 **[Development Setup](docs/dev-setup.md)** | 🚀 **[Development Workflow](docs/DEVELOPMENT_WORKFLOW.md)** | 📚 **[API Documentation](docs/engine-api.md)**
 
 **Bedrock** is the headless, computationally efficient core of the Phoenix platform.  
 It owns the **System Object Model (.SOM)**, performs all calculations, and provides
@@ -32,6 +32,38 @@ and future AI-assisted workflows.
 - **SOM v0:** System Object Model with Two-Surface Element (TSE)
 - **STEP Export:** OpenCascade integration for CAD export
 - **OpenMP Multithreading:** High-performance parallel computation with automatic optimization
+
+---
+
+## 🛠️ Development Workflow
+
+### **🎯 Core Policy: ALL CODE CHANGES ON DEV-01 FIRST**
+
+**Rationale:**
+- ✅ **Consistent build environment** - Linux-based development
+- ✅ **Automated testing** - CI/CD pipelines run on dev-01
+- ✅ **Resource debugging** - Can test with proper environment
+- ✅ **Version control** - All changes tracked in Git
+- ✅ **Quality assurance** - Automated tests and validation
+
+**Workflow:**
+1. **Develop on dev-01** - Make all code changes via Tailscale
+2. **Test on dev-01** - Build and test with automated tests
+3. **Commit from dev-01** - Push changes to repository
+4. **Test locally** - Pull changes and test on local machine
+
+### **Connection Setup**
+```bash
+# Connect to dev-01 via Tailscale
+ssh -i ~/.ssh/github_phoenix mark@100.97.54.75
+cd /home/ec2-user/workspace/bedrock
+
+# Build and test
+mkdir -p build && cd build
+cmake .. -G Ninja
+ninja -k0
+ctest --output-on-failure
+```
 
 ---
 
@@ -98,4 +130,3 @@ Apache License 2.0 © Design Optics Fast LLC
 # Another test commit
 # Test sudo fix
 # Final Sprint 3 validation
-# Smoke test for PR Guard workflow
