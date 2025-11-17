@@ -1,0 +1,57 @@
+name: CI Linux Phase 0
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Ubuntu build (Phase 0 minimal)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake
+
+      - name: Print tool versions
+        run: |
+          echo "=== Tool Versions ==="
+          gcc --version
+          cmake --version
+          echo "===================="
+
+      - name: Configure (CMake - Phase 0 minimal build)
+        run: |
+          cmake -S . -B build/ci \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build bedrock_engine and bedrock_sanity
+        run: |
+          cmake --build build/ci --config Release
+
+      - name: Run tests (bedrock_sanity)
+        working-directory: build/ci
+        run: |
+          ctest --output-on-failure
+
+      - name: Upload CMake logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmake-logs-phase0
+          path: |
+            build/ci/CMakeFiles/CMakeOutput.log
+            build/ci/CMakeFiles/CMakeError.log
+          retention-days: 7
+
