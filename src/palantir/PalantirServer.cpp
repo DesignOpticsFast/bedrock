@@ -376,41 +376,75 @@ void PalantirServer::sendDataChunk(const QString& jobId, const QByteArray& data,
 
 void PalantirServer::computeXYSine(const palantir::ComputeSpec& spec, std::vector<double>& xValues, std::vector<double>& yValues)
 {
-    // Parse parameters
-    double amplitude = 1.0;
+    // Parse parameters with Phoenix-compatible names
+    // Defaults match Phoenix FeatureRegistry defaults
     double frequency = 1.0;
+    double amplitude = 1.0;
     double phase = 0.0;
-    int cycles = 1;
-    int nSamples = 500;
+    int samples = 1000;
+    bool explicitSamplesSet = false;
     
     for (const auto& [key, value] : spec.params()) {
         QString paramKey = QString::fromStdString(key);
         QString paramValue = QString::fromStdString(value);
         
-        if (paramKey == "amplitude") {
-            amplitude = paramValue.toDouble();
-        } else if (paramKey == "frequency") {
-            frequency = paramValue.toDouble();
+        if (paramKey == "frequency") {
+            bool ok;
+            double val = paramValue.toDouble(&ok);
+            if (ok) {
+                frequency = val;
+            }
+        } else if (paramKey == "amplitude") {
+            bool ok;
+            double val = paramValue.toDouble(&ok);
+            if (ok) {
+                amplitude = val;
+            }
         } else if (paramKey == "phase") {
-            phase = paramValue.toDouble();
-        } else if (paramKey == "cycles") {
-            cycles = paramValue.toInt();
+            bool ok;
+            double val = paramValue.toDouble(&ok);
+            if (ok) {
+                phase = val;
+            }
+        } else if (paramKey == "samples") {
+            // Canonical parameter name (Phoenix standard)
+            bool ok;
+            int val = paramValue.toInt(&ok);
+            if (ok) {
+                samples = val;
+                explicitSamplesSet = true;
+            }
         } else if (paramKey == "n_samples") {
-            nSamples = paramValue.toInt();
+            // Backwards-compatible alias (only used if "samples" not set)
+            if (!explicitSamplesSet) {
+                bool ok;
+                int val = paramValue.toInt(&ok);
+                if (ok) {
+                    samples = val;
+                }
+            }
         }
+        // Note: "cycles" parameter is ignored (Phoenix doesn't use it)
     }
     
-    // Compute sine wave
+    // Validate samples (minimum 2)
+    if (samples < 2) {
+        samples = 2;
+    }
+    
+    // Compute sine wave using Phoenix's algorithm
+    // t = i / (samples - 1) from 0 to 1
+    // x = t * 2π (0..2π domain)
+    // y = amplitude * sin(2π * frequency * t + phase)
     xValues.clear();
     yValues.clear();
+    xValues.reserve(samples);
+    yValues.reserve(samples);
     
-    double period = 2.0 * M_PI / frequency;
-    double totalLength = cycles * period;
-    double step = totalLength / nSamples;
-    
-    for (int i = 0; i < nSamples; ++i) {
-        double x = i * step;
-        double y = amplitude * std::sin(frequency * x + phase);
+    for (int i = 0; i < samples; ++i) {
+        double t = static_cast<double>(i) / (samples - 1.0);  // 0 to 1
+        double x = t * 2.0 * M_PI;  // Scale to 0..2π domain
+        double y = amplitude * std::sin(2.0 * M_PI * frequency * t + phase);
         
         xValues.push_back(x);
         yValues.push_back(y);

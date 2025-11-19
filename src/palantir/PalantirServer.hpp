@@ -29,6 +29,9 @@ public:
     // Server capabilities
     int maxConcurrency() const;
     QStringList supportedFeatures() const;
+    
+    // XY Sine computation (public for testing)
+    void computeXYSine(const palantir::ComputeSpec& spec, std::vector<double>& xValues, std::vector<double>& yValues);
 
 signals:
     void clientConnected();
@@ -54,9 +57,6 @@ private:
     void sendProgress(const QString& jobId, double progress, const QString& status);
     void sendResult(const QString& jobId, const palantir::ResultMeta& meta);
     void sendDataChunk(const QString& jobId, const QByteArray& data, int chunkIndex, int totalChunks);
-    
-    // XY Sine computation
-    void computeXYSine(const palantir::ComputeSpec& spec, std::vector<double>& xValues, std::vector<double>& yValues);
     
     // Protocol helpers
     void sendMessage(QLocalSocket* client, const google::protobuf::Message& message);
