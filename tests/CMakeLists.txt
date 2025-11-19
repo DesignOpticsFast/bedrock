@@ -27,6 +27,11 @@ add_executable(test_xysine_compute
   test_xysine_compute.cpp
 )
 
+target_include_directories(test_xysine_compute
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
 target_link_libraries(test_xysine_compute
   PRIVATE
     bedrock_core
@@ -47,6 +52,11 @@ add_executable(test_palantir_xysine
   ../src/palantir/PalantirServer.cpp
 )
 
+target_include_directories(test_palantir_xysine
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
 target_link_libraries(test_palantir_xysine
   PRIVATE
     bedrock_core
@@ -56,6 +66,7 @@ target_link_libraries(test_palantir_xysine
 )
 
 # Link protobuf if available
+find_package(Protobuf QUIET)
 if(Protobuf_FOUND)
   target_link_libraries(test_palantir_xysine PRIVATE protobuf::libprotobuf)
 endif()
