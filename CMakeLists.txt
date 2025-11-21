@@ -22,14 +22,20 @@ option(BUILD_TESTING "Build tests" ON)
 option(BEDROCK_WITH_TRANSPORT_DEPS "Enable gRPC/protobuf transport dependencies (Echo RPC)" OFF)
 
 # ---------------------------------------
-# OpenMP for multithreading
+# OpenMP for multithreading (optional)
 # ---------------------------------------
-find_package(OpenMP REQUIRED)
+# Try to find OpenMP, but don't make it hard-required
+# On Linux/CI, OpenMP will be found and used.
+# On macOS (where OpenMP may not be configured), Bedrock will build without it.
+find_package(OpenMP)
+
 if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
     message(STATUS "OpenMP flags: ${OpenMP_CXX_FLAGS}")
+    set(BEDROCK_HAS_OPENMP ON)
 else()
-    message(FATAL_ERROR "OpenMP not found - required for multithreading support")
+    message(STATUS "OpenMP NOT found - building Bedrock without OpenMP (single-threaded mode)")
+    set(BEDROCK_HAS_OPENMP OFF)
 endif()
 
 # ---------------------------------------
