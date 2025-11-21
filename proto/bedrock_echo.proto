@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package bedrock.echo;
+
+service EchoService {
+  rpc Echo(EchoRequest) returns (EchoReply);
+}
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoReply {
+  string message = 1;
+}
+

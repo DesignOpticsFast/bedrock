@@ -19,6 +19,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Options
 # ---------------------------------------
 option(BUILD_TESTING "Build tests" ON)
+option(BEDROCK_WITH_TRANSPORT_DEPS "Enable gRPC/protobuf transport dependencies (Echo RPC)" OFF)
 
 # ---------------------------------------
 # OpenMP for multithreading
@@ -29,6 +30,74 @@ if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP flags: ${OpenMP_CXX_FLAGS}")
 else()
     message(FATAL_ERROR "OpenMP not found - required for multithreading support")
+endif()
+
+# ---------------------------------------
+# Transport dependencies (gRPC/protobuf) - Echo RPC
+# ---------------------------------------
+# Configure transport deps BEFORE tests subdirectory so variables are available
+if(BEDROCK_WITH_TRANSPORT_DEPS)
+  # Find required packages
+  find_package(Protobuf REQUIRED)
+  find_package(gRPC REQUIRED)
+  
+  # Locate tools
+  find_program(PROTOC protoc REQUIRED)
+  find_program(GRPC_CPP_PLUGIN grpc_cpp_plugin REQUIRED)
+  
+  message(STATUS "Transport deps enabled: protobuf=${Protobuf_VERSION}, gRPC=${gRPC_VERSION}")
+  
+  # Set generated directory
+  set(ECHO_GENERATED_DIR ${CMAKE_BINARY_DIR}/generated/echo)
+  file(MAKE_DIRECTORY ${ECHO_GENERATED_DIR})
+  
+  # Generate protobuf message files
+  set(ECHO_PB_H ${ECHO_GENERATED_DIR}/bedrock_echo.pb.h)
+  set(ECHO_PB_CC ${ECHO_GENERATED_DIR}/bedrock_echo.pb.cc)
+  set(ECHO_GRPC_PB_H ${ECHO_GENERATED_DIR}/bedrock_echo.grpc.pb.h)
+  set(ECHO_GRPC_PB_CC ${ECHO_GENERATED_DIR}/bedrock_echo.grpc.pb.cc)
+  
+  # Generate protobuf files
+  add_custom_command(
+    OUTPUT ${ECHO_PB_H} ${ECHO_PB_CC}
+    COMMAND ${PROTOC}
+    ARGS --cpp_out=${ECHO_GENERATED_DIR}
+         --proto_path=${CMAKE_CURRENT_SOURCE_DIR}/proto
+         ${CMAKE_CURRENT_SOURCE_DIR}/proto/bedrock_echo.proto
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/proto/bedrock_echo.proto
+    COMMENT "Generating bedrock_echo protobuf files"
+    VERBATIM
+  )
+  
+  # Generate gRPC service stub files
+  add_custom_command(
+    OUTPUT ${ECHO_GRPC_PB_H} ${ECHO_GRPC_PB_CC}
+    COMMAND ${PROTOC}
+    ARGS --grpc_out=${ECHO_GENERATED_DIR}
+         --plugin=protoc-gen-grpc=${GRPC_CPP_PLUGIN}
+         --proto_path=${CMAKE_CURRENT_SOURCE_DIR}/proto
+         ${CMAKE_CURRENT_SOURCE_DIR}/proto/bedrock_echo.proto
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/proto/bedrock_echo.proto
+            ${ECHO_PB_H}
+    COMMENT "Generating bedrock_echo gRPC files"
+    VERBATIM
+  )
+  
+  # Create custom target to ensure proto generation happens
+  add_custom_target(bedrock_echo_proto_gen
+    DEPENDS ${ECHO_PB_H} ${ECHO_PB_CC} ${ECHO_GRPC_PB_H} ${ECHO_GRPC_PB_CC}
+  )
+  
+  # Make generated files available to subdirectories
+  set(ECHO_GENERATED_FILES ${ECHO_PB_H} ${ECHO_PB_CC} ${ECHO_GRPC_PB_H} ${ECHO_GRPC_PB_CC})
+  
+  # Optional: libsodium (not required for basic echo RPC)
+  find_package(sodium QUIET)
+  if(sodium_FOUND)
+    message(STATUS "libsodium found (optional)")
+  endif()
+else()
+  message(STATUS "Transport deps disabled (BEDROCK_WITH_TRANSPORT_DEPS=OFF)")
 endif()
 
 # ---------------------------------------
@@ -135,3 +204,76 @@ target_link_libraries(bedrock_sdk INTERFACE
 # --- Sprint 1: smoke (manual run)
 add_executable(bedrock_smoke_step tests/smoke_step_main.cpp)
 target_link_libraries(bedrock_smoke_step PRIVATE bedrock_engine)
+
+# --- Palantir server executable (requires Qt6)
+find_package(Qt6 QUIET COMPONENTS Core Network)
+if(Qt6_FOUND AND Qt6Core_FOUND AND Qt6Network_FOUND)
+  # Find protobuf for palantir messages
+  find_package(Protobuf QUIET)
+  if(Protobuf_FOUND)
+    add_executable(bedrock_server
+      src/palantir/bedrock_server.cpp
+      src/palantir/PalantirServer.cpp
+      src/palantir/PalantirServer.hpp
+    )
+    set_target_properties(bedrock_server PROPERTIES
+      AUTOMOC ON
+    )
+    target_link_libraries(bedrock_server PRIVATE
+      Qt6::Core
+      Qt6::Network
+      protobuf::libprotobuf
+    )
+    # Find palantir.proto location (may be in Phoenix or contracts submodule)
+    find_path(PALANTIR_PROTO_DIR palantir.proto
+      PATHS
+        ${CMAKE_CURRENT_SOURCE_DIR}/proto
+        ${CMAKE_CURRENT_SOURCE_DIR}/../phoenix/proto
+        ${CMAKE_CURRENT_SOURCE_DIR}/contracts/proto
+      NO_DEFAULT_PATH
+    )
+    if(PALANTIR_PROTO_DIR)
+      message(STATUS "Found palantir.proto at: ${PALANTIR_PROTO_DIR}")
+      # Generate palantir.pb.h/cc if not already generated
+      set(PALANTIR_PB_H ${CMAKE_BINARY_DIR}/generated/palantir.pb.h)
+      set(PALANTIR_PB_CC ${CMAKE_BINARY_DIR}/generated/palantir.pb.cc)
+      add_custom_command(
+        OUTPUT ${PALANTIR_PB_H} ${PALANTIR_PB_CC}
+        COMMAND ${PROTOC}
+        ARGS --cpp_out=${CMAKE_BINARY_DIR}/generated
+             --proto_path=${PALANTIR_PROTO_DIR}
+             ${PALANTIR_PROTO_DIR}/palantir.proto
+        DEPENDS ${PALANTIR_PROTO_DIR}/palantir.proto
+        COMMENT "Generating palantir protobuf files"
+        VERBATIM
+      )
+      add_custom_target(palantir_proto_gen DEPENDS ${PALANTIR_PB_H} ${PALANTIR_PB_CC})
+      add_dependencies(bedrock_server palantir_proto_gen)
+      # Add generated .pb.cc to executable sources
+      target_sources(bedrock_server PRIVATE ${PALANTIR_PB_CC})
+      target_include_directories(bedrock_server PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_BINARY_DIR}/generated
+      )
+    else()
+      # Fallback: assume palantir.pb.h exists somewhere
+      target_include_directories(bedrock_server PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/proto
+        ${CMAKE_CURRENT_SOURCE_DIR}/../phoenix/proto
+        ${CMAKE_CURRENT_SOURCE_DIR}/contracts/proto
+      )
+      message(WARNING "palantir.proto not found - assuming palantir.pb.h exists")
+    endif()
+    # Link generated protobuf files if transport deps enabled
+    if(BEDROCK_WITH_TRANSPORT_DEPS)
+      add_dependencies(bedrock_server bedrock_echo_proto_gen)
+      target_include_directories(bedrock_server PRIVATE ${ECHO_GENERATED_DIR})
+    endif()
+    message(STATUS "bedrock_server executable configured")
+  else()
+    message(STATUS "bedrock_server skipped: Protobuf not found")
+  endif()
+else()
+  message(STATUS "bedrock_server skipped: Qt6 not found")
+endif()

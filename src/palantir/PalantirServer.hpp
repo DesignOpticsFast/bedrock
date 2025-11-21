@@ -6,6 +6,10 @@
 #include <QObject>
 #include <QByteArray>
 #include <QString>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
+#include <QProcessEnvironment>
 #include <memory>
 #include <map>
 #include <atomic>
@@ -32,6 +36,30 @@ public:
     
     // XY Sine computation (public for testing)
     void computeXYSine(const palantir::ComputeSpec& spec, std::vector<double>& xValues, std::vector<double>& yValues);
+    
+    // XY Sine computation with job context (for cancellation and progress)
+    void computeXYSineWithProgress(const QString& jobId, const palantir::ComputeSpec& spec, std::vector<double>& xValues, std::vector<double>& yValues);
+    
+    // Validate XY Sine parameters (returns error message if invalid, empty string if valid)
+    QString validateXYSineParameters(const palantir::ComputeSpec& spec);
+
+private:
+    // Parameter parsing helper struct
+    struct ParsedXYSineParams {
+        double frequency = 1.0;
+        double amplitude = 1.0;
+        double phase = 0.0;
+        int samples = 1000;
+        
+        // Flags for validation (only used in validateXYSineParameters)
+        bool hasFrequency = false;
+        bool hasAmplitude = false;
+        bool hasPhase = false;
+        bool hasSamples = false;
+    };
+    
+    // Helper function to parse parameters (no validation)
+    ParsedXYSineParams parseXYSineParameters(const palantir::ComputeSpec& spec, bool trackPresence = false);
 
 signals:
     void clientConnected();
@@ -67,6 +95,11 @@ private:
     std::unique_ptr<QLocalServer> server_;
     QTimer heartbeatTimer_;
     std::atomic<bool> running_;
+    
+    // File-based logging for debugging
+    QFile* logFile_;
+    QTextStream* logStream_;
+    void logToFile(const QString& message);
     
     // Client management
     std::map<QLocalSocket*, QByteArray> clientBuffers_;

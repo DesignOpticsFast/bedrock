@@ -7,6 +7,7 @@
 #include <QCoreApplication>
 #include <QThread>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <cmath>
 #include <algorithm>
 
@@ -17,7 +18,18 @@ PalantirServer::PalantirServer(QObject *parent)
     , maxConcurrency_(QThread::idealThreadCount())
     , supportedFeatures_({"xy_sine", "heat_diffusion"})
     , protocolVersion_("1.0")
+    , logFile_(nullptr)
+    , logStream_(nullptr)
 {
+    // Initialize file-based logging
+    QString logPath = QProcessEnvironment::systemEnvironment().value("BEDROCK_LOG_FILE", "/tmp/bedrock_startjob.log");
+    logFile_ = new QFile(logPath);
+    if (logFile_->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+        logStream_ = new QTextStream(logFile_);
+        logToFile(QString("=== PalantirServer initialized at %1 ===").arg(QDateTime::currentDateTime().toString(Qt::ISODate)));
+    } else {
+        qWarning() << "Failed to open log file:" << logPath;
+    }
     // Connect server signals
     connect(server_.get(), &QLocalServer::newConnection, this, &PalantirServer::onNewConnection);
     
@@ -29,6 +41,17 @@ PalantirServer::PalantirServer(QObject *parent)
 PalantirServer::~PalantirServer()
 {
     stopServer();
+    
+    // Cleanup logging
+    if (logStream_) {
+        delete logStream_;
+        logStream_ = nullptr;
+    }
+    if (logFile_) {
+        logFile_->close();
+        delete logFile_;
+        logFile_ = nullptr;
+    }
 }
 
 bool PalantirServer::startServer(const QString& socketName)
@@ -163,12 +186,17 @@ void PalantirServer::onHeartbeatTimer()
 
 void PalantirServer::handleMessage(QLocalSocket* client, const QByteArray& message)
 {
+    logToFile(QString("handleMessage: Received message, size=%1").arg(message.size()));
+    
     // Parse message type and dispatch
     // For now, handle basic message types
     
     // Try to parse as StartJob
     palantir::StartJob startJob;
     if (startJob.ParseFromArray(message.data(), message.size())) {
+        QString jobId = QString::fromStdString(startJob.job_id().id());
+        QString featureId = QString::fromStdString(startJob.spec().feature_id());
+        logToFile(QString("handleMessage: Parsed StartJob, job_id=%1, feature_id=%2").arg(jobId, featureId));
         handleStartJob(client, startJob);
         return;
     }
@@ -176,6 +204,8 @@ void PalantirServer::handleMessage(QLocalSocket* client, const QByteArray& messa
     // Try to parse as Cancel
     palantir::Cancel cancel;
     if (cancel.ParseFromArray(message.data(), message.size())) {
+        QString jobId = QString::fromStdString(cancel.job_id().id());
+        logToFile(QString("handleMessage: Parsed Cancel, job_id=%1").arg(jobId));
         handleCancel(client, cancel);
         return;
     }
@@ -183,36 +213,70 @@ void PalantirServer::handleMessage(QLocalSocket* client, const QByteArray& messa
     // Try to parse as CapabilitiesRequest
     palantir::CapabilitiesRequest request;
     if (request.ParseFromArray(message.data(), message.size())) {
+        logToFile("handleMessage: Parsed CapabilitiesRequest");
         handleCapabilitiesRequest(client);
         return;
     }
     
-    qDebug() << "Unknown message type received";
+    // Try to parse as Ping
+    palantir::Ping ping;
+    if (ping.ParseFromArray(message.data(), message.size())) {
+        logToFile("handleMessage: Parsed Ping");
+        handlePing(client);
+        return;
+    }
+    
+    logToFile(QString("handleMessage: Unknown message type, size=%1, first_bytes=%2")
+              .arg(message.size())
+              .arg(message.left(16).toHex().toStdString().c_str()));
 }
 
 void PalantirServer::handleStartJob(QLocalSocket* client, const palantir::StartJob& startJob)
 {
     QString jobId = QString::fromStdString(startJob.job_id().id());
     palantir::ComputeSpec spec = startJob.spec();
+    QString featureId = QString::fromStdString(spec.feature_id());
+    
+    logToFile(QString("handleStartJob: ENTERED, job_id=%1, feature_id=%2").arg(jobId, featureId));
     
     // Check if we can handle this job
-    QString featureId = QString::fromStdString(spec.feature_id());
     if (!supportedFeatures_.contains(featureId)) {
+        logToFile(QString("handleStartJob: Feature not supported: %1").arg(featureId));
         palantir::StartReply reply;
         reply.mutable_job_id()->set_id(jobId.toStdString());
         reply.set_status("UNIMPLEMENTED");
         reply.set_error_message("Feature not supported: " + featureId.toStdString());
         sendMessage(client, reply);
+        logToFile(QString("handleStartJob: Sent UNIMPLEMENTED reply for job_id=%1").arg(jobId));
         return;
+    }
+    
+    // Validate parameters for xy_sine feature (explicit INVALID_ARGUMENT errors)
+    if (featureId == "xy_sine") {
+        logToFile(QString("handleStartJob: Validating xy_sine parameters for job_id=%1").arg(jobId));
+        QString validationError = validateXYSineParameters(spec);
+        if (!validationError.isEmpty()) {
+            logToFile(QString("handleStartJob: Validation failed: %1").arg(validationError));
+            palantir::StartReply reply;
+            reply.mutable_job_id()->set_id(jobId.toStdString());
+            reply.set_status("INVALID_ARGUMENT");
+            reply.set_error_message(validationError.toStdString());
+            sendMessage(client, reply);
+            logToFile(QString("handleStartJob: Sent INVALID_ARGUMENT reply for job_id=%1").arg(jobId));
+            return;
+        }
+        logToFile(QString("handleStartJob: Validation passed for job_id=%1").arg(jobId));
     }
     
     // Check concurrency limit
     if (activeJobs_.size() >= maxConcurrency_) {
+        logToFile(QString("handleStartJob: Server at capacity, active_jobs=%1").arg(activeJobs_.size()));
         palantir::StartReply reply;
         reply.mutable_job_id()->set_id(jobId.toStdString());
         reply.set_status("RESOURCE_EXHAUSTED");
         reply.set_error_message("Server at capacity");
         sendMessage(client, reply);
+        logToFile(QString("handleStartJob: Sent RESOURCE_EXHAUSTED reply for job_id=%1").arg(jobId));
         return;
     }
     
@@ -220,12 +284,15 @@ void PalantirServer::handleStartJob(QLocalSocket* client, const palantir::StartJ
     activeJobs_[jobId] = spec;
     jobClients_[jobId] = client;
     jobCancelled_[jobId] = false;
+    logToFile(QString("handleStartJob: Job registered, active_jobs=%1").arg(activeJobs_.size()));
     
     // Send start reply
     palantir::StartReply reply;
     reply.mutable_job_id()->set_id(jobId.toStdString());
     reply.set_status("OK");
+    logToFile(QString("handleStartJob: Sending StartReply OK for job_id=%1").arg(jobId));
     sendMessage(client, reply);
+    logToFile(QString("handleStartJob: StartReply sent for job_id=%1").arg(jobId));
     
     // Start job processing in separate thread
     std::thread jobThread([this, jobId, spec]() {
@@ -234,7 +301,7 @@ void PalantirServer::handleStartJob(QLocalSocket* client, const palantir::StartJ
     
     jobThreads_[jobId] = std::move(jobThread);
     
-    qDebug() << "Started job:" << jobId;
+    logToFile(QString("handleStartJob: Job thread started for job_id=%1").arg(jobId));
 }
 
 void PalantirServer::handleCancel(QLocalSocket* client, const palantir::Cancel& cancel)
@@ -272,14 +339,27 @@ void PalantirServer::processJob(const QString& jobId, const palantir::ComputeSpe
 {
     QString featureId = QString::fromStdString(spec.feature_id());
     
+    logToFile(QString("processJob: STARTED, job_id=%1, feature_id=%2").arg(jobId, featureId));
+    
     if (featureId == "xy_sine") {
-        // Compute XY Sine
-        std::vector<double> xValues, yValues;
-        computeXYSine(spec, xValues, yValues);
+        // Send initial progress
+        sendProgress(jobId, 0.0, "Starting computation...");
         
-        // Check if cancelled
+        // Compute XY Sine with progress and cancellation support
+        std::vector<double> xValues, yValues;
+        logToFile(QString("processJob: Calling computeXYSineWithProgress for job_id=%1").arg(jobId));
+        computeXYSineWithProgress(jobId, spec, xValues, yValues);
+        logToFile(QString("processJob: computeXYSineWithProgress completed for job_id=%1, result_size=%2").arg(jobId).arg(xValues.size()));
+        
+        // Check if cancelled (computeXYSineWithProgress may have returned early)
         if (jobCancelled_[jobId]) {
             sendProgress(jobId, 100.0, "CANCELLED");
+            
+            // Send cancelled result meta
+            palantir::ResultMeta meta;
+            meta.mutable_job_id()->set_id(jobId.toStdString());
+            meta.set_status("CANCELLED");
+            sendResult(jobId, meta);
             return;
         }
         
@@ -308,7 +388,7 @@ void PalantirServer::processJob(const QString& jobId, const palantir::ComputeSpe
             }
             
             int start = i * chunkSize;
-            int end = std::min(start + chunkSize, data.size());
+            int end = std::min(static_cast<int>(start + chunkSize), static_cast<int>(data.size()));
             QByteArray chunk = data.mid(start, end - start);
             
             sendDataChunk(jobId, chunk, i, totalChunks);
@@ -374,14 +454,9 @@ void PalantirServer::sendDataChunk(const QString& jobId, const QByteArray& data,
     sendMessage(client, chunk);
 }
 
-void PalantirServer::computeXYSine(const palantir::ComputeSpec& spec, std::vector<double>& xValues, std::vector<double>& yValues)
+PalantirServer::ParsedXYSineParams PalantirServer::parseXYSineParameters(const palantir::ComputeSpec& spec, bool trackPresence)
 {
-    // Parse parameters with Phoenix-compatible names
-    // Defaults match Phoenix FeatureRegistry defaults
-    double frequency = 1.0;
-    double amplitude = 1.0;
-    double phase = 0.0;
-    int samples = 1000;
+    ParsedXYSineParams params;
     bool explicitSamplesSet = false;
     
     for (const auto& [key, value] : spec.params()) {
@@ -392,27 +467,39 @@ void PalantirServer::computeXYSine(const palantir::ComputeSpec& spec, std::vecto
             bool ok;
             double val = paramValue.toDouble(&ok);
             if (ok) {
-                frequency = val;
+                params.frequency = val;
+                if (trackPresence) {
+                    params.hasFrequency = true;
+                }
             }
         } else if (paramKey == "amplitude") {
             bool ok;
             double val = paramValue.toDouble(&ok);
             if (ok) {
-                amplitude = val;
+                params.amplitude = val;
+                if (trackPresence) {
+                    params.hasAmplitude = true;
+                }
             }
         } else if (paramKey == "phase") {
             bool ok;
             double val = paramValue.toDouble(&ok);
             if (ok) {
-                phase = val;
+                params.phase = val;
+                if (trackPresence) {
+                    params.hasPhase = true;
+                }
             }
         } else if (paramKey == "samples") {
             // Canonical parameter name (Phoenix standard)
             bool ok;
             int val = paramValue.toInt(&ok);
             if (ok) {
-                samples = val;
+                params.samples = val;
                 explicitSamplesSet = true;
+                if (trackPresence) {
+                    params.hasSamples = true;
+                }
             }
         } else if (paramKey == "n_samples") {
             // Backwards-compatible alias (only used if "samples" not set)
@@ -420,17 +507,64 @@ void PalantirServer::computeXYSine(const palantir::ComputeSpec& spec, std::vecto
                 bool ok;
                 int val = paramValue.toInt(&ok);
                 if (ok) {
-                    samples = val;
+                    params.samples = val;
+                    if (trackPresence) {
+                        params.hasSamples = true;
+                    }
                 }
             }
         }
         // Note: "cycles" parameter is ignored (Phoenix doesn't use it)
     }
     
-    // Validate samples (minimum 2)
-    if (samples < 2) {
-        samples = 2;
+    return params;
+}
+
+QString PalantirServer::validateXYSineParameters(const palantir::ComputeSpec& spec)
+{
+    // Parse parameters with presence tracking
+    ParsedXYSineParams params = parseXYSineParameters(spec, true);
+    
+    // Validate ranges (explicit INVALID_ARGUMENT errors, no silent clamping)
+    if (params.hasFrequency && (params.frequency < 0.1 || params.frequency > 100.0)) {
+        return QString("Parameter 'frequency' out of range: %1 (valid: 0.1-100.0)").arg(params.frequency);
     }
+    
+    if (params.hasAmplitude && (params.amplitude < 0.0 || params.amplitude > 10.0)) {
+        return QString("Parameter 'amplitude' out of range: %1 (valid: 0.0-10.0)").arg(params.amplitude);
+    }
+    
+    const double twoPi = 2.0 * M_PI;
+    if (params.hasPhase && (params.phase < -twoPi || params.phase > twoPi)) {
+        return QString("Parameter 'phase' out of range: %1 (valid: %2 to %3)")
+            .arg(params.phase)
+            .arg(-twoPi, 0, 'f', 2)
+            .arg(twoPi, 0, 'f', 2);
+    }
+    
+    if (params.hasSamples && (params.samples < 10 || params.samples > 100000)) {
+        return QString("Parameter 'samples' out of range: %1 (valid: 10-100000)").arg(params.samples);
+    }
+    
+    // Minimum samples validation (even if not explicitly set)
+    if (params.samples < 10) {
+        return QString("Parameter 'samples' too small: %1 (minimum: 10)").arg(params.samples);
+    }
+    
+    return QString();  // Valid
+}
+
+void PalantirServer::computeXYSine(const palantir::ComputeSpec& spec, std::vector<double>& xValues, std::vector<double>& yValues)
+{
+    // Parse parameters using shared helper
+    // Note: Parameters are already validated in handleStartJob(), so we can assume valid ranges
+    ParsedXYSineParams params = parseXYSineParameters(spec, false);
+    
+    // Extract values for computation
+    double frequency = params.frequency;
+    double amplitude = params.amplitude;
+    double phase = params.phase;
+    int samples = params.samples;
     
     // Compute sine wave using Phoenix's algorithm
     // t = i / (samples - 1) from 0 to 1
@@ -451,16 +585,66 @@ void PalantirServer::computeXYSine(const palantir::ComputeSpec& spec, std::vecto
     }
 }
 
+void PalantirServer::computeXYSineWithProgress(const QString& jobId, const palantir::ComputeSpec& spec, std::vector<double>& xValues, std::vector<double>& yValues)
+{
+    // Parse parameters using shared helper
+    ParsedXYSineParams params = parseXYSineParameters(spec, false);
+    
+    // Extract values for computation
+    double frequency = params.frequency;
+    double amplitude = params.amplitude;
+    double phase = params.phase;
+    int samples = params.samples;
+    
+    // Compute sine wave with progress and cancellation support
+    xValues.clear();
+    yValues.clear();
+    xValues.reserve(samples);
+    yValues.reserve(samples);
+    
+    // Progress throttling: track last progress send time (≤5 Hz = every 200ms)
+    QElapsedTimer progressTimer;
+    progressTimer.start();
+    const qint64 progressIntervalMs = 200;  // 5 Hz max
+    
+    for (int i = 0; i < samples; ++i) {
+        // Check for cancellation every 100 samples (as per decision #5)
+        if (i % 100 == 0 && jobCancelled_[jobId]) {
+            return;  // Exit early if cancelled
+        }
+        
+        // Send progress throttled to ≤5 Hz
+        if (progressTimer.elapsed() >= progressIntervalMs) {
+            double progress = (static_cast<double>(i) / samples) * 100.0;
+            sendProgress(jobId, progress, "Computing...");
+            progressTimer.restart();
+        }
+        
+        double t = static_cast<double>(i) / (samples - 1.0);  // 0 to 1
+        double x = t * 2.0 * M_PI;  // Scale to 0..2π domain
+        double y = amplitude * std::sin(2.0 * M_PI * frequency * t + phase);
+        
+        xValues.push_back(x);
+        yValues.push_back(y);
+    }
+    
+    // Send final progress
+    sendProgress(jobId, 100.0, "Complete");
+}
+
 void PalantirServer::sendMessage(QLocalSocket* client, const google::protobuf::Message& message)
 {
     if (!client || client->state() != QLocalSocket::ConnectedState) {
+        logToFile(QString("sendMessage: SKIPPED - client=%1, state=%2")
+                  .arg(client ? "valid" : "null")
+                  .arg(client ? QString::number(client->state()) : "N/A"));
         return;
     }
     
     // Serialize message
     std::string serialized;
     if (!message.SerializeToString(&serialized)) {
-        qDebug() << "Failed to serialize message";
+        logToFile("sendMessage: Failed to serialize message");
         return;
     }
     
@@ -472,10 +656,34 @@ void PalantirServer::sendMessage(QLocalSocket* client, const google::protobuf::M
     data.append(reinterpret_cast<const char*>(&length), 4);
     data.append(serialized.data(), serialized.size());
     
+    // Try to identify message type for logging
+    QString msgType = "Unknown";
+    if (message.GetTypeName() == "palantir.StartReply") {
+        const palantir::StartReply* reply = dynamic_cast<const palantir::StartReply*>(&message);
+        if (reply) {
+            msgType = QString("StartReply(status=%1, job_id=%2)")
+                      .arg(QString::fromStdString(reply->status()))
+                      .arg(QString::fromStdString(reply->job_id().id()));
+        }
+    } else {
+        msgType = QString::fromStdString(message.GetTypeName());
+    }
+    
+    logToFile(QString("sendMessage: Sending %1, size=%2").arg(msgType).arg(data.size()));
+    
     // Send data
     qint64 written = client->write(data);
     if (written != data.size()) {
-        qDebug() << "Failed to send complete message";
+        logToFile(QString("sendMessage: Failed to send complete message, written=%1, expected=%2")
+                  .arg(written).arg(data.size()));
+        return;
+    }
+    
+    // Flush data to ensure it's sent immediately
+    if (!client->flush()) {
+        logToFile("sendMessage: Failed to flush message");
+    } else {
+        logToFile(QString("sendMessage: Successfully sent and flushed %1").arg(msgType));
     }
 }
 
@@ -502,6 +710,17 @@ QByteArray PalantirServer::readMessage(QLocalSocket* client)
     buffer.remove(0, 4 + length);
     
     return message;
+}
+
+void PalantirServer::logToFile(const QString& message)
+{
+    if (logStream_) {
+        QString timestamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz");
+        *logStream_ << "[" << timestamp << "] " << message << Qt::endl;
+        logStream_->flush();
+    }
+    // Also log to qDebug for immediate visibility
+    qDebug() << message;
 }
 
 void PalantirServer::parseIncomingData(QLocalSocket* client)
