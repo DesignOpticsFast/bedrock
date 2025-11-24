@@ -11,6 +11,8 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(bedrock_tests
   test_math.cpp
+  # Palantir tests (only when transport deps enabled)
+  $<$<BOOL:${BEDROCK_WITH_TRANSPORT_DEPS}>:palantir/CapabilitiesService_test.cpp>
 )
 
 target_link_libraries(bedrock_tests
@@ -18,6 +20,18 @@ target_link_libraries(bedrock_tests
     bedrock_core
     GTest::gtest_main
 )
+
+# Link Palantir libraries when transport deps are enabled
+if(BEDROCK_WITH_TRANSPORT_DEPS)
+  target_link_libraries(bedrock_tests PRIVATE
+    bedrock_capabilities_service
+    bedrock_palantir_proto
+  )
+  target_compile_definitions(bedrock_tests PRIVATE BEDROCK_WITH_TRANSPORT_DEPS)
+  target_include_directories(bedrock_tests PRIVATE
+    ${CMAKE_BINARY_DIR}/generated/palantir
+  )
+endif()
 
 include(GoogleTest)
 gtest_discover_tests(bedrock_tests)

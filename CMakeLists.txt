@@ -173,8 +173,47 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     target_link_libraries(bedrock_palantir_proto PUBLIC
       protobuf::libprotobuf
     )
+    
+    # Protobuf 6.33+ requires abseil libraries
+    # Link abseil libraries that protobuf depends on
+    find_library(ABSL_DIE_IF_NULL_LIB absl_die_if_null PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INITIALIZE_LIB absl_log_initialize PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_STATUSOR_LIB absl_statusor PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INTERNAL_CHECK_OP_LIB absl_log_internal_check_op PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INTERNAL_CONDITIONS_LIB absl_log_internal_conditions PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INTERNAL_MESSAGE_LIB absl_log_internal_message PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    
+    if(ABSL_DIE_IF_NULL_LIB AND ABSL_LOG_INITIALIZE_LIB AND ABSL_STATUSOR_LIB)
+      target_link_libraries(bedrock_palantir_proto PUBLIC
+        ${ABSL_DIE_IF_NULL_LIB}
+        ${ABSL_LOG_INITIALIZE_LIB}
+        ${ABSL_STATUSOR_LIB}
+        ${ABSL_LOG_INTERNAL_CHECK_OP_LIB}
+        ${ABSL_LOG_INTERNAL_CONDITIONS_LIB}
+        ${ABSL_LOG_INTERNAL_MESSAGE_LIB}
+      )
+    endif()
 
     message(STATUS "Palantir proto codegen enabled: Capabilities.proto -> bedrock_palantir_proto")
+    
+    # ---------------------------------------
+    # CapabilitiesService library
+    # ---------------------------------------
+    add_library(bedrock_capabilities_service STATIC
+      src/palantir/CapabilitiesService.cpp
+    )
+    
+    target_include_directories(bedrock_capabilities_service PUBLIC
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    
+    target_link_libraries(bedrock_capabilities_service PUBLIC
+      bedrock_palantir_proto
+    )
+    
+    # Add compile definition so code can check for transport deps
+    target_compile_definitions(bedrock_capabilities_service PRIVATE BEDROCK_WITH_TRANSPORT_DEPS)
   else()
     message(WARNING "Capabilities.proto not found at ${CAPABILITIES_PROTO}")
   endif()
