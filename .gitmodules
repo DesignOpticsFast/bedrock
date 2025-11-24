@@ -1,4 +1,4 @@
 [submodule "docs/palantir"]
 	path = docs/palantir
-	url = git@github.com:MarkBedrock/palantir.git
+	url = git@github.com:DesignOpticsFast/palantir.git
 	branch = main
