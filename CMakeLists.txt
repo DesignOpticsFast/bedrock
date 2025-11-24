@@ -214,6 +214,47 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     
     # Add compile definition so code can check for transport deps
     target_compile_definitions(bedrock_capabilities_service PRIVATE BEDROCK_WITH_TRANSPORT_DEPS)
+    
+    # ---------------------------------------
+    # PalantirServer library (Qt-based IPC server)
+    # ---------------------------------------
+    find_package(Qt6 REQUIRED COMPONENTS Core Network)
+    
+    add_library(bedrock_palantir_server STATIC
+      src/palantir/PalantirServer.cpp
+    )
+    
+    target_include_directories(bedrock_palantir_server PUBLIC
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    
+    target_link_libraries(bedrock_palantir_server PUBLIC
+      Qt6::Core
+      Qt6::Network
+      bedrock_palantir_proto
+      bedrock_capabilities_service
+    )
+    
+    target_compile_definitions(bedrock_palantir_server PRIVATE BEDROCK_WITH_TRANSPORT_DEPS)
+    
+    # ---------------------------------------
+    # bedrock_server executable
+    # ---------------------------------------
+    add_executable(bedrock_server
+      src/palantir/bedrock_server.cpp
+    )
+    
+    target_link_libraries(bedrock_server PRIVATE
+      bedrock_palantir_server
+    )
+    
+    # Enable Qt MOC for PalantirServer
+    set_target_properties(bedrock_palantir_server PROPERTIES
+      AUTOMOC ON
+    )
+    
+    message(STATUS "bedrock_server executable configured")
   else()
     message(WARNING "Capabilities.proto not found at ${CAPABILITIES_PROTO}")
   endif()
