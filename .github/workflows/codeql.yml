@@ -16,7 +16,7 @@ permissions:
 jobs:
   analyze:
     name: CodeQL Analysis
-    runs-on: [self-hosted, linux, x64, dev01, fastpath]
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,9 +28,13 @@ jobs:
       
       - name: Install dependencies (no OCCT for CodeQL)
         run: |
-          sudo dnf update -y
-          sudo dnf install -y tbb-devel
-          # Note: OCCT not available in AL2023 - CodeQL will analyze without OCCT
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            g++ \
+            libtbb-dev
+          # Note: OCCT not available - CodeQL will analyze without OCCT
       
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v4

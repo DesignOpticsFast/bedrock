@@ -27,7 +27,7 @@ jobs:
               ref: pr.head.sha
             });
             
-            const requiredChecks = ['CI', 'CodeQL'];
+            const requiredChecks = ['CI / build', 'CodeQL Analysis'];
             const allChecksPassing = requiredChecks.every(checkName => {
               const check = checks.check_runs.find(c => c.name === checkName);
               return check && check.conclusion === 'success';

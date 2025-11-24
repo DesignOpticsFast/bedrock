@@ -15,7 +15,7 @@ permissions:
 jobs:
   build:                       # keep this id so the check stays "CI / build"
     name: Ubuntu build (with OpenCascade)
-    runs-on: [self-hosted, linux, x64, dev01, fastpath]
+    runs-on: ubuntu-latest
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
@@ -24,42 +24,32 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v5
 
-      - name: Install deps (toolchain + TBB + ccache)
+      - name: Install dependencies
         run: |
-          sudo dnf update -y
-          sudo dnf install -y cmake ninja-build gcc gcc-c++ make tbb-devel
-          # ccache is already installed from our manual setup
-          echo "Basic toolchain installed, will handle OCCT separately"
-
-      - name: Setup ccache dirs
-        run: |
-          mkdir -p /var/cache/ccache
-          echo "CCACHE_DIR=/var/cache/ccache" >> $GITHUB_ENV
-          echo "CCACHE_BASEDIR=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          sudo chown -R github-runner:github-runner /var/cache/ccache
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            ninja-build \
+            g++ \
+            libtbb-dev
 
       - name: Configure (CMake - engine-only build)
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DBEDROCK_WITH_OCCT=OFF
 
       - name: Print tool versions
         run: |
           echo "=== Tool Versions ==="
-          gcc --version
+          g++ --version
           cmake --version
           ninja --version
-          ccache --version
           echo "===================="
 
       - name: Build libraries only
         run: |
-          ccache -z
           cmake --build build --config Release --target bedrock_engine -j
-          ccache -s
 
       - name: Upload CMake logs (on failure)
         if: failure()
@@ -71,16 +61,7 @@ jobs:
             build/CMakeFiles/CMakeError.log
           retention-days: 7
 
-      - name: Upload ccache stats
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ccache-stats
-          path: /var/cache/ccache
-          retention-days: 7
-
       - name: Post-job cleanup
         if: always()
         run: |
           rm -rf "$HOME/_work" || true
-          ccache --cleanup || true
