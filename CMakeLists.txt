@@ -19,6 +19,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Options
 # ---------------------------------------
 option(BUILD_TESTING "Build tests" ON)
+option(BEDROCK_WITH_TRANSPORT_DEPS "Enable Palantir/transport deps" OFF)
 
 # ---------------------------------------
 # OpenMP for multithreading
@@ -131,6 +132,53 @@ target_include_directories(bedrock_sdk INTERFACE
 # Link to bedrock_som (header-only) but NOT bedrock_geom (which has OCCT)
 target_link_libraries(bedrock_sdk INTERFACE
   bedrock_som)
+
+# ---------------------------------------
+# Palantir protobuf code generation (WP1)
+# ---------------------------------------
+if(BEDROCK_WITH_TRANSPORT_DEPS)
+  find_program(PROTOC_EXECUTABLE protoc)
+  if(NOT PROTOC_EXECUTABLE)
+    message(FATAL_ERROR "protoc not found but BEDROCK_WITH_TRANSPORT_DEPS=ON. Install protobuf (e.g., brew install protobuf)")
+  endif()
+
+  set(PALANTIR_PROTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/docs/palantir/proto")
+  set(PALANTIR_PROTO_OUT_DIR "${CMAKE_BINARY_DIR}/generated/palantir")
+  file(MAKE_DIRECTORY "${PALANTIR_PROTO_OUT_DIR}")
+
+  set(CAPABILITIES_PROTO "${PALANTIR_PROTO_DIR}/palantir/capabilities.proto")
+
+  if(EXISTS "${CAPABILITIES_PROTO}")
+    add_custom_command(
+      OUTPUT
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/capabilities.pb.cc"
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/capabilities.pb.h"
+      COMMAND "${PROTOC_EXECUTABLE}"
+        --proto_path="${PALANTIR_PROTO_DIR}"
+        --cpp_out="${PALANTIR_PROTO_OUT_DIR}"
+        "${CAPABILITIES_PROTO}"
+      DEPENDS "${CAPABILITIES_PROTO}"
+      COMMENT "Generating C++ from Palantir Capabilities.proto"
+    )
+
+    add_library(bedrock_palantir_proto STATIC
+      "${PALANTIR_PROTO_OUT_DIR}/palantir/capabilities.pb.cc"
+    )
+
+    target_include_directories(bedrock_palantir_proto PUBLIC
+      "${PALANTIR_PROTO_OUT_DIR}"
+    )
+
+    find_package(Protobuf REQUIRED)
+    target_link_libraries(bedrock_palantir_proto PUBLIC
+      protobuf::libprotobuf
+    )
+
+    message(STATUS "Palantir proto codegen enabled: Capabilities.proto -> bedrock_palantir_proto")
+  else()
+    message(WARNING "Capabilities.proto not found at ${CAPABILITIES_PROTO}")
+  endif()
+endif()
 
 # --- Sprint 1: smoke (manual run)
 add_executable(bedrock_smoke_step tests/smoke_step_main.cpp)
