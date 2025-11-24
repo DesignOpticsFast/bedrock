@@ -153,43 +153,32 @@ void PalantirServer::onClientReadyRead()
 
 void PalantirServer::onHeartbeatTimer()
 {
-    // Send pong to all connected clients
-    for (auto& [client, buffer] : clientBuffers_) {
-        palantir::Pong pong;
-        pong.set_timestamp_ms(QDateTime::currentMSecsSinceEpoch());
-        sendMessage(client, pong);
-    }
+    // WP1: Heartbeat/Pong not yet implemented (requires Pong proto message)
+    // Future: Send pong to all connected clients when Pong message is defined
+    // For now, heartbeat timer is disabled or no-op
 }
 
 void PalantirServer::handleMessage(QLocalSocket* client, const QByteArray& message)
 {
     // Parse message type and dispatch
-    // For now, handle basic message types
+    // WP1: Only handle CapabilitiesRequest
+    // Future: Add StartJob, Cancel, Ping/Pong when those proto messages are defined
     
-    // Try to parse as StartJob
-    palantir::StartJob startJob;
-    if (startJob.ParseFromArray(message.data(), message.size())) {
-        handleStartJob(client, startJob);
-        return;
-    }
-    
-    // Try to parse as Cancel
-    palantir::Cancel cancel;
-    if (cancel.ParseFromArray(message.data(), message.size())) {
-        handleCancel(client, cancel);
-        return;
-    }
-    
+#ifdef BEDROCK_WITH_TRANSPORT_DEPS
     // Try to parse as CapabilitiesRequest
     palantir::CapabilitiesRequest request;
     if (request.ParseFromArray(message.data(), message.size())) {
         handleCapabilitiesRequest(client);
         return;
     }
+#endif
     
     qDebug() << "Unknown message type received";
 }
 
+// WP1: StartJob handler disabled (proto message not yet defined)
+// Future: Re-enable when StartJob proto is added
+/*
 void PalantirServer::handleStartJob(QLocalSocket* client, const palantir::StartJob& startJob)
 {
     QString jobId = QString::fromStdString(startJob.job_id().id());
@@ -236,30 +225,22 @@ void PalantirServer::handleStartJob(QLocalSocket* client, const palantir::StartJ
     
     qDebug() << "Started job:" << jobId;
 }
-
-void PalantirServer::handleCancel(QLocalSocket* client, const palantir::Cancel& cancel)
-{
-    QString jobId = QString::fromStdString(cancel.job_id().id());
-    
-    if (activeJobs_.contains(jobId)) {
-        jobCancelled_[jobId] = true;
-        qDebug() << "Cancelled job:" << jobId;
-    }
-}
+*/
 
 void PalantirServer::handleCapabilitiesRequest(QLocalSocket* client)
 {
-    palantir::Capabilities caps;
-    caps.set_max_concurrency(maxConcurrency_);
-    caps.set_protocol_version(protocolVersion_.toStdString());
-    
-    for (const QString& feature : supportedFeatures_) {
-        caps.add_supported_features(feature.toStdString());
-    }
-    
-    sendMessage(client, caps);
+#ifdef BEDROCK_WITH_TRANSPORT_DEPS
+    bedrock::palantir::CapabilitiesService service;
+    palantir::CapabilitiesResponse response = service.getCapabilities();
+    sendMessage(client, response);
+#else
+    qWarning() << "Capabilities requested but transport deps disabled";
+#endif
 }
 
+// WP1: Ping/Pong handler disabled (proto message not yet defined)
+// Future: Re-enable when Pong proto is added
+/*
 void PalantirServer::handlePing(QLocalSocket* client)
 {
     // Respond with pong
@@ -267,7 +248,10 @@ void PalantirServer::handlePing(QLocalSocket* client)
     pong.set_timestamp_ms(QDateTime::currentMSecsSinceEpoch());
     sendMessage(client, pong);
 }
+*/
 
+// WP1: processJob disabled (proto message not yet defined)
+/*
 void PalantirServer::processJob(const QString& jobId, const palantir::ComputeSpec& spec)
 {
     QString featureId = QString::fromStdString(spec.feature_id());
@@ -330,7 +314,10 @@ void PalantirServer::processJob(const QString& jobId, const palantir::ComputeSpe
         }
     }
 }
+*/
 
+// WP1: sendProgress disabled (proto message not yet defined)
+/*
 void PalantirServer::sendProgress(const QString& jobId, double progress, const QString& status)
 {
     if (!jobClients_.contains(jobId)) {
@@ -346,7 +333,10 @@ void PalantirServer::sendProgress(const QString& jobId, double progress, const Q
     
     sendMessage(client, progressMsg);
 }
+*/
 
+// WP1: sendResult disabled (proto message not yet defined)
+/*
 void PalantirServer::sendResult(const QString& jobId, const palantir::ResultMeta& meta)
 {
     if (!jobClients_.contains(jobId)) {
@@ -356,7 +346,10 @@ void PalantirServer::sendResult(const QString& jobId, const palantir::ResultMeta
     QLocalSocket* client = jobClients_[jobId];
     sendMessage(client, meta);
 }
+*/
 
+// WP1: sendDataChunk disabled (proto message not yet defined)
+/*
 void PalantirServer::sendDataChunk(const QString& jobId, const QByteArray& data, int chunkIndex, int totalChunks)
 {
     if (!jobClients_.contains(jobId)) {
@@ -373,7 +366,10 @@ void PalantirServer::sendDataChunk(const QString& jobId, const QByteArray& data,
     
     sendMessage(client, chunk);
 }
+*/
 
+// WP1: computeXYSine disabled (proto message not yet defined)
+/*
 void PalantirServer::computeXYSine(const palantir::ComputeSpec& spec, std::vector<double>& xValues, std::vector<double>& yValues)
 {
     // Parse parameters
@@ -416,7 +412,9 @@ void PalantirServer::computeXYSine(const palantir::ComputeSpec& spec, std::vecto
         yValues.push_back(y);
     }
 }
+*/
 
+#ifdef BEDROCK_WITH_TRANSPORT_DEPS
 void PalantirServer::sendMessage(QLocalSocket* client, const google::protobuf::Message& message)
 {
     if (!client || client->state() != QLocalSocket::ConnectedState) {
@@ -444,6 +442,7 @@ void PalantirServer::sendMessage(QLocalSocket* client, const google::protobuf::M
         qDebug() << "Failed to send complete message";
     }
 }
+#endif // BEDROCK_WITH_TRANSPORT_DEPS
 
 QByteArray PalantirServer::readMessage(QLocalSocket* client)
 {

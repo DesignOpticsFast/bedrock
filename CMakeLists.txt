@@ -19,6 +19,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Options
 # ---------------------------------------
 option(BUILD_TESTING "Build tests" ON)
+option(BEDROCK_WITH_TRANSPORT_DEPS "Enable Palantir/transport deps" OFF)
 
 # ---------------------------------------
 # OpenMP for multithreading
@@ -131,6 +132,133 @@ target_include_directories(bedrock_sdk INTERFACE
 # Link to bedrock_som (header-only) but NOT bedrock_geom (which has OCCT)
 target_link_libraries(bedrock_sdk INTERFACE
   bedrock_som)
+
+# ---------------------------------------
+# Palantir protobuf code generation (WP1)
+# ---------------------------------------
+if(BEDROCK_WITH_TRANSPORT_DEPS)
+  find_program(PROTOC_EXECUTABLE protoc)
+  if(NOT PROTOC_EXECUTABLE)
+    message(FATAL_ERROR "protoc not found but BEDROCK_WITH_TRANSPORT_DEPS=ON. Install protobuf (e.g., brew install protobuf)")
+  endif()
+
+  set(PALANTIR_PROTO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/docs/palantir/proto")
+  set(PALANTIR_PROTO_OUT_DIR "${CMAKE_BINARY_DIR}/generated/palantir")
+  file(MAKE_DIRECTORY "${PALANTIR_PROTO_OUT_DIR}")
+
+  set(CAPABILITIES_PROTO "${PALANTIR_PROTO_DIR}/palantir/capabilities.proto")
+
+  if(EXISTS "${CAPABILITIES_PROTO}")
+    add_custom_command(
+      OUTPUT
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/capabilities.pb.cc"
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/capabilities.pb.h"
+      COMMAND "${PROTOC_EXECUTABLE}"
+        --proto_path="${PALANTIR_PROTO_DIR}"
+        --cpp_out="${PALANTIR_PROTO_OUT_DIR}"
+        "${CAPABILITIES_PROTO}"
+      DEPENDS "${CAPABILITIES_PROTO}"
+      COMMENT "Generating C++ from Palantir Capabilities.proto"
+    )
+
+    add_library(bedrock_palantir_proto STATIC
+      "${PALANTIR_PROTO_OUT_DIR}/palantir/capabilities.pb.cc"
+    )
+
+    target_include_directories(bedrock_palantir_proto PUBLIC
+      "${PALANTIR_PROTO_OUT_DIR}"
+    )
+
+    find_package(Protobuf REQUIRED)
+    target_link_libraries(bedrock_palantir_proto PUBLIC
+      protobuf::libprotobuf
+    )
+    
+    # Protobuf 6.33+ requires abseil libraries
+    # Link abseil libraries that protobuf depends on
+    find_library(ABSL_DIE_IF_NULL_LIB absl_die_if_null PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INITIALIZE_LIB absl_log_initialize PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_STATUSOR_LIB absl_statusor PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INTERNAL_CHECK_OP_LIB absl_log_internal_check_op PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INTERNAL_CONDITIONS_LIB absl_log_internal_conditions PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INTERNAL_MESSAGE_LIB absl_log_internal_message PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    
+    if(ABSL_DIE_IF_NULL_LIB AND ABSL_LOG_INITIALIZE_LIB AND ABSL_STATUSOR_LIB)
+      target_link_libraries(bedrock_palantir_proto PUBLIC
+        ${ABSL_DIE_IF_NULL_LIB}
+        ${ABSL_LOG_INITIALIZE_LIB}
+        ${ABSL_STATUSOR_LIB}
+        ${ABSL_LOG_INTERNAL_CHECK_OP_LIB}
+        ${ABSL_LOG_INTERNAL_CONDITIONS_LIB}
+        ${ABSL_LOG_INTERNAL_MESSAGE_LIB}
+      )
+    endif()
+
+    message(STATUS "Palantir proto codegen enabled: Capabilities.proto -> bedrock_palantir_proto")
+    
+    # ---------------------------------------
+    # CapabilitiesService library
+    # ---------------------------------------
+    add_library(bedrock_capabilities_service STATIC
+      src/palantir/CapabilitiesService.cpp
+    )
+    
+    target_include_directories(bedrock_capabilities_service PUBLIC
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    
+    target_link_libraries(bedrock_capabilities_service PUBLIC
+      bedrock_palantir_proto
+    )
+    
+    # Add compile definition so code can check for transport deps
+    target_compile_definitions(bedrock_capabilities_service PRIVATE BEDROCK_WITH_TRANSPORT_DEPS)
+    
+    # ---------------------------------------
+    # PalantirServer library (Qt-based IPC server)
+    # ---------------------------------------
+    find_package(Qt6 REQUIRED COMPONENTS Core Network)
+    
+    add_library(bedrock_palantir_server STATIC
+      src/palantir/PalantirServer.cpp
+    )
+    
+    target_include_directories(bedrock_palantir_server PUBLIC
+      ${CMAKE_CURRENT_SOURCE_DIR}/src
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    
+    target_link_libraries(bedrock_palantir_server PUBLIC
+      Qt6::Core
+      Qt6::Network
+      bedrock_palantir_proto
+      bedrock_capabilities_service
+    )
+    
+    target_compile_definitions(bedrock_palantir_server PRIVATE BEDROCK_WITH_TRANSPORT_DEPS)
+    
+    # ---------------------------------------
+    # bedrock_server executable
+    # ---------------------------------------
+    add_executable(bedrock_server
+      src/palantir/bedrock_server.cpp
+    )
+    
+    target_link_libraries(bedrock_server PRIVATE
+      bedrock_palantir_server
+    )
+    
+    # Enable Qt MOC for PalantirServer
+    set_target_properties(bedrock_palantir_server PROPERTIES
+      AUTOMOC ON
+    )
+    
+    message(STATUS "bedrock_server executable configured")
+  else()
+    message(WARNING "Capabilities.proto not found at ${CAPABILITIES_PROTO}")
+  endif()
+endif()
 
 # --- Sprint 1: smoke (manual run)
 add_executable(bedrock_smoke_step tests/smoke_step_main.cpp)
