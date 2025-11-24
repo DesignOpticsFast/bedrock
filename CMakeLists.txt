@@ -147,6 +147,7 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
   file(MAKE_DIRECTORY "${PALANTIR_PROTO_OUT_DIR}")
 
   set(CAPABILITIES_PROTO "${PALANTIR_PROTO_DIR}/palantir/capabilities.proto")
+  set(XYSINE_PROTO "${PALANTIR_PROTO_DIR}/palantir/xysine.proto")
 
   if(EXISTS "${CAPABILITIES_PROTO}")
     add_custom_command(
@@ -160,9 +161,34 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
       DEPENDS "${CAPABILITIES_PROTO}"
       COMMENT "Generating C++ from Palantir Capabilities.proto"
     )
+  endif()
 
+  if(EXISTS "${XYSINE_PROTO}")
+    add_custom_command(
+      OUTPUT
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/xysine.pb.cc"
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/xysine.pb.h"
+      COMMAND "${PROTOC_EXECUTABLE}"
+        --proto_path="${PALANTIR_PROTO_DIR}"
+        --cpp_out="${PALANTIR_PROTO_OUT_DIR}"
+        "${XYSINE_PROTO}"
+      DEPENDS "${XYSINE_PROTO}"
+      COMMENT "Generating C++ from Palantir xysine.proto"
+    )
+  endif()
+
+  # Build proto library with all available proto files
+  set(PROTO_SOURCES)
+  if(EXISTS "${CAPABILITIES_PROTO}")
+    list(APPEND PROTO_SOURCES "${PALANTIR_PROTO_OUT_DIR}/palantir/capabilities.pb.cc")
+  endif()
+  if(EXISTS "${XYSINE_PROTO}")
+    list(APPEND PROTO_SOURCES "${PALANTIR_PROTO_OUT_DIR}/palantir/xysine.pb.cc")
+  endif()
+
+  if(PROTO_SOURCES)
     add_library(bedrock_palantir_proto STATIC
-      "${PALANTIR_PROTO_OUT_DIR}/palantir/capabilities.pb.cc"
+      ${PROTO_SOURCES}
     )
 
     target_include_directories(bedrock_palantir_proto PUBLIC
@@ -182,16 +208,33 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     find_library(ABSL_LOG_INTERNAL_CHECK_OP_LIB absl_log_internal_check_op PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
     find_library(ABSL_LOG_INTERNAL_CONDITIONS_LIB absl_log_internal_conditions PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
     find_library(ABSL_LOG_INTERNAL_MESSAGE_LIB absl_log_internal_message PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INTERNAL_NULLGUARD_LIB absl_log_internal_nullguard PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
     
-    if(ABSL_DIE_IF_NULL_LIB AND ABSL_LOG_INITIALIZE_LIB AND ABSL_STATUSOR_LIB)
-      target_link_libraries(bedrock_palantir_proto PUBLIC
-        ${ABSL_DIE_IF_NULL_LIB}
-        ${ABSL_LOG_INITIALIZE_LIB}
-        ${ABSL_STATUSOR_LIB}
-        ${ABSL_LOG_INTERNAL_CHECK_OP_LIB}
-        ${ABSL_LOG_INTERNAL_CONDITIONS_LIB}
-        ${ABSL_LOG_INTERNAL_MESSAGE_LIB}
-      )
+    set(ABSEIL_LIBS)
+    if(ABSL_DIE_IF_NULL_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_DIE_IF_NULL_LIB})
+    endif()
+    if(ABSL_LOG_INITIALIZE_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_LOG_INITIALIZE_LIB})
+    endif()
+    if(ABSL_STATUSOR_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_STATUSOR_LIB})
+    endif()
+    if(ABSL_LOG_INTERNAL_CHECK_OP_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_LOG_INTERNAL_CHECK_OP_LIB})
+    endif()
+    if(ABSL_LOG_INTERNAL_CONDITIONS_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_LOG_INTERNAL_CONDITIONS_LIB})
+    endif()
+    if(ABSL_LOG_INTERNAL_MESSAGE_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_LOG_INTERNAL_MESSAGE_LIB})
+    endif()
+    if(ABSL_LOG_INTERNAL_NULLGUARD_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_LOG_INTERNAL_NULLGUARD_LIB})
+    endif()
+    
+    if(ABSEIL_LIBS)
+      target_link_libraries(bedrock_palantir_proto PUBLIC ${ABSEIL_LIBS})
     endif()
 
     message(STATUS "Palantir proto codegen enabled: Capabilities.proto -> bedrock_palantir_proto")
@@ -235,6 +278,11 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
       bedrock_palantir_proto
       bedrock_capabilities_service
     )
+    
+    # Link abseil libraries (required by protobuf 6.33+)
+    if(ABSEIL_LIBS)
+      target_link_libraries(bedrock_palantir_server PUBLIC ${ABSEIL_LIBS})
+    endif()
     
     target_compile_definitions(bedrock_palantir_server PRIVATE BEDROCK_WITH_TRANSPORT_DEPS)
     

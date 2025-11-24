@@ -14,6 +14,7 @@
 
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
 #include "palantir/capabilities.pb.h"
+#include "palantir/xysine.pb.h"
 #include "CapabilitiesService.hpp"
 #endif
 
@@ -49,6 +50,8 @@ private:
     void handleMessage(QLocalSocket* client, const QByteArray& message);
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
     void handleCapabilitiesRequest(QLocalSocket* client);
+    void handleXYSineRequest(QLocalSocket* client, const palantir::XYSineRequest& request);
+    void computeXYSine(const palantir::XYSineRequest& request, std::vector<double>& xValues, std::vector<double>& yValues);
 #endif
     // Future: Add StartJob, Cancel, Ping handlers when proto messages are defined
     // void handleStartJob(QLocalSocket* client, const palantir::StartJob& startJob);
