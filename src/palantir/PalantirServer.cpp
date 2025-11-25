@@ -808,8 +808,9 @@ void PalantirServer::parseIncomingData(QLocalSocket* client)
     QByteArray& buffer = it->second;
     buffer += newData;
     
-    // Process messages (readMessage will not be called here since we're already locked)
-    // Instead, parse directly from buffer
+    // Process messages (parse directly from buffer while holding lock)
+    // Extract messages to process outside the lock
+    std::vector<QByteArray> messagesToProcess;
     while (buffer.size() >= 4) {
         uint32_t length;
         std::memcpy(&length, buffer.data(), 4);
@@ -826,18 +827,13 @@ void PalantirServer::parseIncomingData(QLocalSocket* client)
         
         QByteArray message = buffer.mid(4, length);
         buffer.remove(0, 4 + length);
-        
-        // Release lock before calling handleMessage (which may take time)
-        lock.~lock_guard();
+        messagesToProcess.push_back(message);
+    }
+    // Lock is released here when lock goes out of scope
+    
+    // Process messages outside the lock
+    for (const QByteArray& message : messagesToProcess) {
         handleMessage(client, message);
-        // Re-acquire lock for next iteration
-        new (std::addressof(lock)) std::lock_guard<std::mutex>(clientBuffersMutex_);
-        // Re-find iterator (client may have been removed)
-        it = clientBuffers_.find(client);
-        if (it == clientBuffers_.end()) {
-            break; // Client disconnected
-        }
-        buffer = it->second;
     }
 #endif
 }
