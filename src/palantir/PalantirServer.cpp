@@ -12,6 +12,8 @@
 
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
 #include "palantir/xysine.pb.h"
+#include "palantir/envelope.pb.h"
+#include "palantir/error.pb.h"
 #endif
 
 PalantirServer::PalantirServer(QObject *parent)
@@ -164,11 +166,54 @@ void PalantirServer::onHeartbeatTimer()
 
 void PalantirServer::handleMessage(QLocalSocket* client, const QByteArray& message)
 {
-    // Parse message type and dispatch
-    // WP1: Handle CapabilitiesRequest and XYSineRequest
-    // Future: Add StartJob, Cancel, Ping/Pong when those proto messages are defined
-    
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
+    // Sprint 4.5: Try new format first (with MessageType)
+    palantir::MessageType messageType;
+    QByteArray payload;
+    
+    if (readMessageWithType(client, messageType, payload)) {
+        // New format: dispatch by MessageType
+        switch (messageType) {
+            case palantir::MessageType::CAPABILITIES_REQUEST: {
+                palantir::CapabilitiesRequest request;
+                if (request.ParseFromArray(payload.data(), payload.size())) {
+                    handleCapabilitiesRequest(client);
+                } else {
+                    sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
+                                     "Failed to parse CapabilitiesRequest");
+                }
+                return;
+            }
+            case palantir::MessageType::XY_SINE_REQUEST: {
+                palantir::XYSineRequest request;
+                if (request.ParseFromArray(payload.data(), payload.size())) {
+                    handleXYSineRequest(client, request);
+                } else {
+                    sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
+                                     "Failed to parse XYSineRequest");
+                }
+                return;
+            }
+            case palantir::MessageType::ERROR_RESPONSE:
+                // Server should not receive ErrorResponse
+                qDebug() << "Server received ErrorResponse (unexpected)";
+                return;
+            default:
+                sendErrorResponse(client, palantir::ErrorCode::UNKNOWN_MESSAGE_TYPE,
+                                 QString("Unknown message type: %1").arg(static_cast<int>(messageType)));
+                return;
+        }
+    }
+    
+    // Backward compatibility: try old format (no MessageType)
+    // Log deprecation warning
+    static bool deprecationWarningLogged = false;
+    if (!deprecationWarningLogged) {
+        qWarning() << "DEPRECATED: Received message in old format (no MessageType). "
+                   << "This format will be removed in Sprint 4.6. Please upgrade to new format.";
+        deprecationWarningLogged = true;
+    }
+    
     // Try to parse as XYSineRequest (check before CapabilitiesRequest for specificity)
     palantir::XYSineRequest xySineRequest;
     if (xySineRequest.ParseFromArray(message.data(), message.size())) {
@@ -182,9 +227,13 @@ void PalantirServer::handleMessage(QLocalSocket* client, const QByteArray& messa
         handleCapabilitiesRequest(client);
         return;
     }
-#endif
     
-    qDebug() << "Unknown message type received";
+    // Unknown message format
+    sendErrorResponse(client, palantir::ErrorCode::UNKNOWN_MESSAGE_TYPE,
+                     "Failed to parse message (unknown format)");
+#else
+    qDebug() << "Message received but transport deps disabled";
+#endif
 }
 
 // WP1: StartJob handler disabled (proto message not yet defined)
@@ -243,7 +292,7 @@ void PalantirServer::handleCapabilitiesRequest(QLocalSocket* client)
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
     bedrock::palantir::CapabilitiesService service;
     palantir::CapabilitiesResponse response = service.getCapabilities();
-    sendMessage(client, response);
+    sendMessage(client, palantir::MessageType::CAPABILITIES_RESPONSE, response);
 #else
     qWarning() << "Capabilities requested but transport deps disabled";
 #endif
@@ -269,7 +318,7 @@ void PalantirServer::handleXYSineRequest(QLocalSocket* client, const palantir::X
     response.set_status("OK");
     
     // Send response
-    sendMessage(client, response);
+    sendMessage(client, palantir::MessageType::XY_SINE_RESPONSE, response);
 #else
     qWarning() << "XY Sine requested but transport deps disabled";
 #endif
@@ -485,7 +534,7 @@ void PalantirServer::computeXYSine(const palantir::ComputeSpec& spec, std::vecto
 */
 
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
-void PalantirServer::sendMessage(QLocalSocket* client, const google::protobuf::Message& message)
+void PalantirServer::sendMessage(QLocalSocket* client, palantir::MessageType type, const google::protobuf::Message& message)
 {
     if (!client || client->state() != QLocalSocket::ConnectedState) {
         return;
@@ -495,15 +544,30 @@ void PalantirServer::sendMessage(QLocalSocket* client, const google::protobuf::M
     std::string serialized;
     if (!message.SerializeToString(&serialized)) {
         qDebug() << "Failed to serialize message";
+        sendErrorResponse(client, palantir::ErrorCode::INTERNAL_ERROR, 
+                         "Failed to serialize message");
         return;
     }
     
-    // Create length-prefixed message
-    QByteArray data;
-    uint32_t length = static_cast<uint32_t>(serialized.size());
+    // Check size limit
+    if (serialized.size() > MAX_MESSAGE_SIZE) {
+        qDebug() << "Message too large:" << serialized.size();
+        sendErrorResponse(client, palantir::ErrorCode::MESSAGE_TOO_LARGE,
+                         QString("Message size %1 exceeds limit %2")
+                         .arg(serialized.size()).arg(MAX_MESSAGE_SIZE));
+        return;
+    }
     
-    // Write length (little-endian)
-    data.append(reinterpret_cast<const char*>(&length), 4);
+    // Create length-prefixed message with MessageType
+    QByteArray data;
+    uint32_t totalLength = static_cast<uint32_t>(serialized.size() + 1); // +1 for MessageType byte
+    uint8_t typeByte = static_cast<uint8_t>(type);
+    
+    // Write length (little-endian, 4 bytes)
+    data.append(reinterpret_cast<const char*>(&totalLength), 4);
+    // Write MessageType (1 byte)
+    data.append(reinterpret_cast<const char*>(&typeByte), 1);
+    // Write serialized message
     data.append(serialized.data(), serialized.size());
     
     // Send data
@@ -512,8 +576,65 @@ void PalantirServer::sendMessage(QLocalSocket* client, const google::protobuf::M
         qDebug() << "Failed to send complete message";
     }
 }
-#endif // BEDROCK_WITH_TRANSPORT_DEPS
 
+void PalantirServer::sendErrorResponse(QLocalSocket* client, palantir::ErrorCode errorCode, 
+                                       const QString& message, const QString& details)
+{
+    palantir::ErrorResponse error;
+    error.set_error_code(errorCode);
+    error.set_message(message.toStdString());
+    if (!details.isEmpty()) {
+        error.set_details(details.toStdString());
+    }
+    sendMessage(client, palantir::MessageType::ERROR_RESPONSE, error);
+}
+
+bool PalantirServer::readMessageWithType(QLocalSocket* client, palantir::MessageType& outType, QByteArray& outPayload)
+{
+    if (!client) {
+        return false;
+    }
+    
+    QByteArray& buffer = clientBuffers_[client];
+    
+    // Need at least 5 bytes: 4-byte length + 1-byte MessageType
+    if (buffer.size() < 5) {
+        return false;
+    }
+    
+    // Read length (little-endian)
+    uint32_t totalLength;
+    std::memcpy(&totalLength, buffer.data(), 4);
+    
+    // Check size limit
+    if (totalLength > MAX_MESSAGE_SIZE + 1) { // +1 for MessageType byte
+        qDebug() << "Message length exceeds limit:" << totalLength;
+        sendErrorResponse(client, palantir::ErrorCode::MESSAGE_TOO_LARGE,
+                         QString("Message length %1 exceeds limit %2")
+                         .arg(totalLength).arg(MAX_MESSAGE_SIZE + 1));
+        buffer.clear(); // Clear buffer to prevent further parsing
+        return false;
+    }
+    
+    // Check if we have the complete message
+    if (buffer.size() < 4 + totalLength) {
+        return false;
+    }
+    
+    // Read MessageType (1 byte after length)
+    uint8_t typeByte = static_cast<uint8_t>(buffer[4]);
+    outType = static_cast<palantir::MessageType>(typeByte);
+    
+    // Read payload (everything after MessageType)
+    outPayload = buffer.mid(5, totalLength - 1);
+    buffer.remove(0, 4 + totalLength);
+    
+    return true;
+}
+
+// Backward compatibility: read old format (no MessageType, just length + payload)
+// This function is kept for backward compatibility but is deprecated
+// It reads from the buffer directly (used by parseIncomingData for old format)
 QByteArray PalantirServer::readMessage(QLocalSocket* client)
 {
     if (!client) {
@@ -527,7 +648,14 @@ QByteArray PalantirServer::readMessage(QLocalSocket* client)
     }
     
     uint32_t length;
-    memcpy(&length, buffer.data(), 4);
+    std::memcpy(&length, buffer.data(), 4);
+    
+    // Check size limit
+    if (length > MAX_MESSAGE_SIZE) {
+        qDebug() << "Old-format message length exceeds limit:" << length;
+        buffer.clear();
+        return QByteArray();
+    }
     
     if (buffer.size() < 4 + length) {
         return QByteArray();
@@ -538,6 +666,7 @@ QByteArray PalantirServer::readMessage(QLocalSocket* client)
     
     return message;
 }
+#endif // BEDROCK_WITH_TRANSPORT_DEPS
 
 void PalantirServer::parseIncomingData(QLocalSocket* client)
 {
@@ -548,14 +677,64 @@ void PalantirServer::parseIncomingData(QLocalSocket* client)
     QByteArray& buffer = clientBuffers_[client];
     buffer += client->readAll();
     
+#ifdef BEDROCK_WITH_TRANSPORT_DEPS
+    // Try new format first (5 bytes minimum: 4-byte length + 1-byte MessageType)
+    while (buffer.size() >= 5) {
+        palantir::MessageType messageType;
+        QByteArray payload;
+        if (readMessageWithType(client, messageType, payload)) {
+            // Dispatch by MessageType
+            switch (messageType) {
+                case palantir::MessageType::CAPABILITIES_REQUEST: {
+                    palantir::CapabilitiesRequest request;
+                    if (request.ParseFromArray(payload.data(), payload.size())) {
+                        handleCapabilitiesRequest(client);
+                    } else {
+                        sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
+                                         "Failed to parse CapabilitiesRequest");
+                    }
+                    continue;
+                }
+                case palantir::MessageType::XY_SINE_REQUEST: {
+                    palantir::XYSineRequest request;
+                    if (request.ParseFromArray(payload.data(), payload.size())) {
+                        handleXYSineRequest(client, request);
+                    } else {
+                        sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
+                                         "Failed to parse XYSineRequest");
+                    }
+                    continue;
+                }
+                case palantir::MessageType::ERROR_RESPONSE:
+                    qDebug() << "Server received ErrorResponse (unexpected)";
+                    continue;
+                default:
+                    sendErrorResponse(client, palantir::ErrorCode::UNKNOWN_MESSAGE_TYPE,
+                                     QString("Unknown message type: %1").arg(static_cast<int>(messageType)));
+                    continue;
+            }
+        }
+        break; // Not enough data yet
+    }
+    
+    // Fallback: try old format (backward compatibility)
     while (buffer.size() >= 4) {
         QByteArray message = readMessage(client);
         if (message.isEmpty()) {
             break;
         }
-        
         handleMessage(client, message);
     }
+#else
+    // Old format only (when transport deps disabled)
+    while (buffer.size() >= 4) {
+        QByteArray message = readMessage(client);
+        if (message.isEmpty()) {
+            break;
+        }
+        handleMessage(client, message);
+    }
+#endif
 }
 
 #include "PalantirServer.moc"

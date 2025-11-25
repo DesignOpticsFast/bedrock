@@ -15,6 +15,8 @@
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
 #include "palantir/capabilities.pb.h"
 #include "palantir/xysine.pb.h"
+#include "palantir/envelope.pb.h"
+#include "palantir/error.pb.h"
 #include "CapabilitiesService.hpp"
 #endif
 
@@ -70,10 +72,16 @@ private:
     
     // Protocol helpers
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
-    void sendMessage(QLocalSocket* client, const google::protobuf::Message& message);
-#endif
+    void sendMessage(QLocalSocket* client, palantir::MessageType type, const google::protobuf::Message& message);
+    void sendErrorResponse(QLocalSocket* client, palantir::ErrorCode errorCode, const QString& message, const QString& details = QString());
+    bool readMessageWithType(QLocalSocket* client, palantir::MessageType& outType, QByteArray& outPayload);
+    // Backward compatibility: read old format (no MessageType)
     QByteArray readMessage(QLocalSocket* client);
+#endif
     void parseIncomingData(QLocalSocket* client);
+    
+    // Constants
+    static constexpr uint32_t MAX_MESSAGE_SIZE = 10 * 1024 * 1024; // 10MB
     
     // Server state
     std::unique_ptr<QLocalServer> server_;
