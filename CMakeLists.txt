@@ -237,7 +237,7 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
       target_link_libraries(bedrock_palantir_proto PUBLIC ${ABSEIL_LIBS})
     endif()
 
-    message(STATUS "Palantir proto codegen enabled: Capabilities.proto -> bedrock_palantir_proto")
+    message(STATUS "Palantir proto codegen enabled: Capabilities, XYSine, Envelope, Error -> bedrock_palantir_proto")
     
     # ---------------------------------------
     # CapabilitiesService library
