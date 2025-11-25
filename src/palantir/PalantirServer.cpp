@@ -10,6 +10,10 @@
 #include <cmath>
 #include <algorithm>
 
+#ifdef BEDROCK_WITH_TRANSPORT_DEPS
+#include "palantir/xysine.pb.h"
+#endif
+
 PalantirServer::PalantirServer(QObject *parent)
     : QObject(parent)
     , server_(std::make_unique<QLocalServer>(this))
@@ -161,10 +165,17 @@ void PalantirServer::onHeartbeatTimer()
 void PalantirServer::handleMessage(QLocalSocket* client, const QByteArray& message)
 {
     // Parse message type and dispatch
-    // WP1: Only handle CapabilitiesRequest
+    // WP1: Handle CapabilitiesRequest and XYSineRequest
     // Future: Add StartJob, Cancel, Ping/Pong when those proto messages are defined
     
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
+    // Try to parse as XYSineRequest (check before CapabilitiesRequest for specificity)
+    palantir::XYSineRequest xySineRequest;
+    if (xySineRequest.ParseFromArray(message.data(), message.size())) {
+        handleXYSineRequest(client, xySineRequest);
+        return;
+    }
+    
     // Try to parse as CapabilitiesRequest
     palantir::CapabilitiesRequest request;
     if (request.ParseFromArray(message.data(), message.size())) {
@@ -236,6 +247,65 @@ void PalantirServer::handleCapabilitiesRequest(QLocalSocket* client)
 #else
     qWarning() << "Capabilities requested but transport deps disabled";
 #endif
+}
+
+void PalantirServer::handleXYSineRequest(QLocalSocket* client, const palantir::XYSineRequest& request)
+{
+#ifdef BEDROCK_WITH_TRANSPORT_DEPS
+    // Compute XY Sine
+    std::vector<double> xValues, yValues;
+    computeXYSine(request, xValues, yValues);
+    
+    // Build response
+    palantir::XYSineResponse response;
+    response.mutable_x()->Reserve(static_cast<int>(xValues.size()));
+    response.mutable_y()->Reserve(static_cast<int>(yValues.size()));
+    for (double x : xValues) {
+        response.add_x(x);
+    }
+    for (double y : yValues) {
+        response.add_y(y);
+    }
+    response.set_status("OK");
+    
+    // Send response
+    sendMessage(client, response);
+#else
+    qWarning() << "XY Sine requested but transport deps disabled";
+#endif
+}
+
+void PalantirServer::computeXYSine(const palantir::XYSineRequest& request, std::vector<double>& xValues, std::vector<double>& yValues)
+{
+    // Parse parameters from request (proto3 provides default values: 0.0 for double, 0 for int32)
+    // Use explicit defaults to match Phoenix behavior
+    double frequency = request.frequency() != 0.0 ? request.frequency() : 1.0;
+    double amplitude = request.amplitude() != 0.0 ? request.amplitude() : 1.0;
+    double phase = request.phase();  // 0.0 is valid default
+    int samples = request.samples() != 0 ? request.samples() : 1000;
+    
+    // Validate samples (minimum 2) - matches Phoenix behavior
+    if (samples < 2) {
+        samples = 2;
+    }
+    
+    // Compute sine wave using EXACT Phoenix algorithm
+    // t = i / (samples - 1) from 0 to 1
+    // x = t * 2π (0..2π domain)
+    // y = amplitude * sin(2π * frequency * t + phase)
+    xValues.clear();
+    yValues.clear();
+    xValues.reserve(samples);
+    yValues.reserve(samples);
+    
+    for (int i = 0; i < samples; ++i) {
+        double t = static_cast<double>(i) / (samples - 1.0);  // 0 to 1
+        double x = t * 2.0 * M_PI;  // Scale to 0..2π domain
+        double y = amplitude * std::sin(2.0 * M_PI * frequency * t + phase);
+        
+        xValues.push_back(x);
+        yValues.push_back(y);
+    }
 }
 
 // WP1: Ping/Pong handler disabled (proto message not yet defined)
