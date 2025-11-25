@@ -9,7 +9,7 @@ namespace bedrock {
 namespace palantir {
 
 // CapabilitiesService - In-process API for generating CapabilitiesResponse
-// WP1: Simple, deterministic implementation without networking
+// Capabilities service providing server capability information
 // Future: Will be integrated into Palantir IPC server
 class CapabilitiesService {
 public:

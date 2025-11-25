@@ -148,6 +148,8 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
 
   set(CAPABILITIES_PROTO "${PALANTIR_PROTO_DIR}/palantir/capabilities.proto")
   set(XYSINE_PROTO "${PALANTIR_PROTO_DIR}/palantir/xysine.proto")
+  set(ENVELOPE_PROTO "${PALANTIR_PROTO_DIR}/palantir/envelope.proto")
+  set(ERROR_PROTO "${PALANTIR_PROTO_DIR}/palantir/error.proto")
 
   if(EXISTS "${CAPABILITIES_PROTO}")
     add_custom_command(
@@ -177,6 +179,34 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     )
   endif()
 
+  if(EXISTS "${ENVELOPE_PROTO}")
+    add_custom_command(
+      OUTPUT
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/envelope.pb.cc"
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/envelope.pb.h"
+      COMMAND "${PROTOC_EXECUTABLE}"
+        --proto_path="${PALANTIR_PROTO_DIR}"
+        --cpp_out="${PALANTIR_PROTO_OUT_DIR}"
+        "${ENVELOPE_PROTO}"
+      DEPENDS "${ENVELOPE_PROTO}"
+      COMMENT "Generating C++ from Palantir envelope.proto"
+    )
+  endif()
+
+  if(EXISTS "${ERROR_PROTO}")
+    add_custom_command(
+      OUTPUT
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/error.pb.cc"
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/error.pb.h"
+      COMMAND "${PROTOC_EXECUTABLE}"
+        --proto_path="${PALANTIR_PROTO_DIR}"
+        --cpp_out="${PALANTIR_PROTO_OUT_DIR}"
+        "${ERROR_PROTO}"
+      DEPENDS "${ERROR_PROTO}"
+      COMMENT "Generating C++ from Palantir error.proto"
+    )
+  endif()
+
   # Build proto library with all available proto files
   set(PROTO_SOURCES)
   if(EXISTS "${CAPABILITIES_PROTO}")
@@ -184,6 +214,12 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
   endif()
   if(EXISTS "${XYSINE_PROTO}")
     list(APPEND PROTO_SOURCES "${PALANTIR_PROTO_OUT_DIR}/palantir/xysine.pb.cc")
+  endif()
+  if(EXISTS "${ENVELOPE_PROTO}")
+    list(APPEND PROTO_SOURCES "${PALANTIR_PROTO_OUT_DIR}/palantir/envelope.pb.cc")
+  endif()
+  if(EXISTS "${ERROR_PROTO}")
+    list(APPEND PROTO_SOURCES "${PALANTIR_PROTO_OUT_DIR}/palantir/error.pb.cc")
   endif()
 
   if(PROTO_SOURCES)
@@ -209,6 +245,8 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     find_library(ABSL_LOG_INTERNAL_CONDITIONS_LIB absl_log_internal_conditions PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
     find_library(ABSL_LOG_INTERNAL_MESSAGE_LIB absl_log_internal_message PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
     find_library(ABSL_LOG_INTERNAL_NULLGUARD_LIB absl_log_internal_nullguard PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_HASH_LIB absl_hash PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INTERNAL_FORMAT_LIB absl_log_internal_format PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
     
     set(ABSEIL_LIBS)
     if(ABSL_DIE_IF_NULL_LIB)
@@ -232,12 +270,18 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     if(ABSL_LOG_INTERNAL_NULLGUARD_LIB)
       list(APPEND ABSEIL_LIBS ${ABSL_LOG_INTERNAL_NULLGUARD_LIB})
     endif()
+    if(ABSL_HASH_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_HASH_LIB})
+    endif()
+    if(ABSL_LOG_INTERNAL_FORMAT_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_LOG_INTERNAL_FORMAT_LIB})
+    endif()
     
     if(ABSEIL_LIBS)
       target_link_libraries(bedrock_palantir_proto PUBLIC ${ABSEIL_LIBS})
     endif()
 
-    message(STATUS "Palantir proto codegen enabled: Capabilities.proto -> bedrock_palantir_proto")
+    message(STATUS "Palantir proto codegen enabled: Capabilities, XYSine, Envelope, Error -> bedrock_palantir_proto")
     
     # ---------------------------------------
     # CapabilitiesService library
@@ -265,6 +309,8 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     
     add_library(bedrock_palantir_server STATIC
       src/palantir/PalantirServer.cpp
+      src/palantir/EnvelopeHelpers.cpp
+      src/palantir/EnvelopeHelpers.hpp
     )
     
     target_include_directories(bedrock_palantir_server PUBLIC
