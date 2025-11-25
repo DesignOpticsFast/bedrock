@@ -73,11 +73,23 @@ void PalantirServer::stopServer()
         }
     }
     
-    // Wait for job threads to finish
-    for (auto& [jobId, thread] : jobThreads_) {
-        if (thread.joinable()) {
-            thread.join();
+    // Wait for job threads to finish (thread-safe)
+    {
+        std::lock_guard<std::mutex> lock(jobMutex_);
+        for (auto& [jobId, thread] : jobThreads_) {
+            if (thread.joinable()) {
+                thread.join();
+            }
         }
+        jobThreads_.clear();
+        jobClients_.clear();
+        jobCancelled_.clear();
+    }
+    
+    // Clear client buffers (thread-safe)
+    {
+        std::lock_guard<std::mutex> lock(clientBuffersMutex_);
+        clientBuffers_.clear();
     }
     
     // Stop server
@@ -114,8 +126,11 @@ void PalantirServer::onNewConnection()
     connect(client, &QLocalSocket::disconnected, this, &PalantirServer::onClientDisconnected);
     connect(client, &QLocalSocket::readyRead, this, &PalantirServer::onClientReadyRead);
     
-    // Initialize client buffer
-    clientBuffers_[client] = QByteArray();
+    // Initialize client buffer (thread-safe)
+    {
+        std::lock_guard<std::mutex> lock(clientBuffersMutex_);
+        clientBuffers_[client] = QByteArray();
+    }
     
     emit clientConnected();
     qDebug() << "Client connected";
@@ -128,21 +143,28 @@ void PalantirServer::onClientDisconnected()
         return;
     }
     
-    // Remove client from tracking
-    clientBuffers_.erase(client);
+    // Remove client from tracking (thread-safe)
+    {
+        std::lock_guard<std::mutex> lock(clientBuffersMutex_);
+        clientBuffers_.erase(client);
+    }
     
-    // Cancel jobs for this client
-    for (auto it = jobClients_.begin(); it != jobClients_.end();) {
-        if (it->second == client) {
-            QString jobId = it->first;
-            jobCancelled_[jobId] = true;
-            jobClients_.erase(it++);
-        } else {
-            ++it;
+    // Cancel jobs for this client (thread-safe)
+    {
+        std::lock_guard<std::mutex> lock(jobMutex_);
+        for (auto it = jobClients_.begin(); it != jobClients_.end();) {
+            if (it->second == client) {
+                QString jobId = it->first;
+                jobCancelled_[jobId] = true;
+                jobClients_.erase(it++);
+            } else {
+                ++it;
+            }
         }
     }
     
-    client->deleteLater();
+    // Qt will handle socket deletion via parent-child relationship
+    // No need to call deleteLater() explicitly - client is child of server
     emit clientDisconnected();
     qDebug() << "Client disconnected";
 }
@@ -536,8 +558,24 @@ void PalantirServer::computeXYSine(const palantir::ComputeSpec& spec, std::vecto
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
 void PalantirServer::sendMessage(QLocalSocket* client, palantir::MessageType type, const google::protobuf::Message& message)
 {
-    if (!client || client->state() != QLocalSocket::ConnectedState) {
+    if (!client) {
         return;
+    }
+    
+    // Check if client is still valid and connected (thread-safe check)
+    // Note: QLocalSocket::state() is thread-safe for reading
+    if (client->state() != QLocalSocket::ConnectedState) {
+        qDebug() << "Attempted to send message to disconnected client";
+        return;
+    }
+    
+    // Verify client is still in our tracking (optional safety check)
+    {
+        std::lock_guard<std::mutex> lock(clientBuffersMutex_);
+        if (clientBuffers_.find(client) == clientBuffers_.end()) {
+            qDebug() << "Attempted to send message to unknown client";
+            return;
+        }
     }
     
     // Serialize message
@@ -595,7 +633,13 @@ bool PalantirServer::readMessageWithType(QLocalSocket* client, palantir::Message
         return false;
     }
     
-    QByteArray& buffer = clientBuffers_[client];
+    // Thread-safe access to client buffer
+    std::lock_guard<std::mutex> lock(clientBuffersMutex_);
+    auto it = clientBuffers_.find(client);
+    if (it == clientBuffers_.end()) {
+        return false; // Client not found (may have disconnected)
+    }
+    QByteArray& buffer = it->second;
     
     // Need at least 5 bytes: 4-byte length + 1-byte MessageType
     if (buffer.size() < 5) {
@@ -641,7 +685,13 @@ QByteArray PalantirServer::readMessage(QLocalSocket* client)
         return QByteArray();
     }
     
-    QByteArray& buffer = clientBuffers_[client];
+    // Thread-safe access to client buffer
+    std::lock_guard<std::mutex> lock(clientBuffersMutex_);
+    auto it = clientBuffers_.find(client);
+    if (it == clientBuffers_.end()) {
+        return QByteArray(); // Client not found (may have disconnected)
+    }
+    QByteArray& buffer = it->second;
     
     if (buffer.size() < 4) {
         return QByteArray();
@@ -674,51 +724,67 @@ void PalantirServer::parseIncomingData(QLocalSocket* client)
         return;
     }
     
-    QByteArray& buffer = clientBuffers_[client];
-    buffer += client->readAll();
+    // Read all available data first
+    QByteArray newData = client->readAll();
+    if (newData.isEmpty()) {
+        return;
+    }
+    
+    // Thread-safe access to client buffer
+    std::lock_guard<std::mutex> lock(clientBuffersMutex_);
+    auto it = clientBuffers_.find(client);
+    if (it == clientBuffers_.end()) {
+        // Client not found (may have disconnected)
+        return;
+    }
+    QByteArray& buffer = it->second;
+    buffer += newData;
     
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
     // Try new format first (5 bytes minimum: 4-byte length + 1-byte MessageType)
-    while (buffer.size() >= 5) {
+    // Note: readMessageWithType will lock clientBuffersMutex_ internally
+    while (true) {
         palantir::MessageType messageType;
         QByteArray payload;
-        if (readMessageWithType(client, messageType, payload)) {
-            // Dispatch by MessageType
-            switch (messageType) {
-                case palantir::MessageType::CAPABILITIES_REQUEST: {
-                    palantir::CapabilitiesRequest request;
-                    if (request.ParseFromArray(payload.data(), payload.size())) {
-                        handleCapabilitiesRequest(client);
-                    } else {
-                        sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
-                                         "Failed to parse CapabilitiesRequest");
-                    }
-                    continue;
-                }
-                case palantir::MessageType::XY_SINE_REQUEST: {
-                    palantir::XYSineRequest request;
-                    if (request.ParseFromArray(payload.data(), payload.size())) {
-                        handleXYSineRequest(client, request);
-                    } else {
-                        sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
-                                         "Failed to parse XYSineRequest");
-                    }
-                    continue;
-                }
-                case palantir::MessageType::ERROR_RESPONSE:
-                    qDebug() << "Server received ErrorResponse (unexpected)";
-                    continue;
-                default:
-                    sendErrorResponse(client, palantir::ErrorCode::UNKNOWN_MESSAGE_TYPE,
-                                     QString("Unknown message type: %1").arg(static_cast<int>(messageType)));
-                    continue;
-            }
+        if (!readMessageWithType(client, messageType, payload)) {
+            break; // Not enough data or client disconnected
         }
-        break; // Not enough data yet
+        
+        // Dispatch by MessageType
+        switch (messageType) {
+            case palantir::MessageType::CAPABILITIES_REQUEST: {
+                palantir::CapabilitiesRequest request;
+                if (request.ParseFromArray(payload.data(), payload.size())) {
+                    handleCapabilitiesRequest(client);
+                } else {
+                    sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
+                                     "Failed to parse CapabilitiesRequest");
+                }
+                continue;
+            }
+            case palantir::MessageType::XY_SINE_REQUEST: {
+                palantir::XYSineRequest request;
+                if (request.ParseFromArray(payload.data(), payload.size())) {
+                    handleXYSineRequest(client, request);
+                } else {
+                    sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
+                                     "Failed to parse XYSineRequest");
+                }
+                continue;
+            }
+            case palantir::MessageType::ERROR_RESPONSE:
+                qDebug() << "Server received ErrorResponse (unexpected)";
+                continue;
+            default:
+                sendErrorResponse(client, palantir::ErrorCode::UNKNOWN_MESSAGE_TYPE,
+                                 QString("Unknown message type: %1").arg(static_cast<int>(messageType)));
+                continue;
+        }
     }
     
     // Fallback: try old format (backward compatibility)
-    while (buffer.size() >= 4) {
+    // Note: readMessage will lock clientBuffersMutex_ internally
+    while (true) {
         QByteArray message = readMessage(client);
         if (message.isEmpty()) {
             break;
@@ -727,12 +793,51 @@ void PalantirServer::parseIncomingData(QLocalSocket* client)
     }
 #else
     // Old format only (when transport deps disabled)
+    // Read data first
+    QByteArray newData = client->readAll();
+    if (newData.isEmpty()) {
+        return;
+    }
+    
+    // Thread-safe access to client buffer
+    std::lock_guard<std::mutex> lock(clientBuffersMutex_);
+    auto it = clientBuffers_.find(client);
+    if (it == clientBuffers_.end()) {
+        return; // Client not found (may have disconnected)
+    }
+    QByteArray& buffer = it->second;
+    buffer += newData;
+    
+    // Process messages (readMessage will not be called here since we're already locked)
+    // Instead, parse directly from buffer
     while (buffer.size() >= 4) {
-        QByteArray message = readMessage(client);
-        if (message.isEmpty()) {
+        uint32_t length;
+        std::memcpy(&length, buffer.data(), 4);
+        
+        if (length > MAX_MESSAGE_SIZE) {
+            qDebug() << "Old-format message length exceeds limit:" << length;
+            buffer.clear();
             break;
         }
+        
+        if (buffer.size() < 4 + length) {
+            break; // Not enough data yet
+        }
+        
+        QByteArray message = buffer.mid(4, length);
+        buffer.remove(0, 4 + length);
+        
+        // Release lock before calling handleMessage (which may take time)
+        lock.~lock_guard();
         handleMessage(client, message);
+        // Re-acquire lock for next iteration
+        new (std::addressof(lock)) std::lock_guard<std::mutex>(clientBuffersMutex_);
+        // Re-find iterator (client may have been removed)
+        it = clientBuffers_.find(client);
+        if (it == clientBuffers_.end()) {
+            break; // Client disconnected
+        }
+        buffer = it->second;
     }
 #endif
 }

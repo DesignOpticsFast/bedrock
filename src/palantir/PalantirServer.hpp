@@ -88,8 +88,10 @@ private:
     QTimer heartbeatTimer_;
     std::atomic<bool> running_;
     
-    // Client management
+    // Client management (thread-safe access required)
     std::map<QLocalSocket*, QByteArray> clientBuffers_;
+    std::mutex clientBuffersMutex_;  // Protects clientBuffers_ access
+    
     std::map<QString, QLocalSocket*> jobClients_;
     
     // Job tracking (WP1: disabled - proto messages not yet defined)
@@ -98,7 +100,7 @@ private:
     
     // Threading
     std::map<QString, std::thread> jobThreads_;
-    std::mutex jobMutex_;
+    std::mutex jobMutex_;  // Protects jobClients_, jobCancelled_, jobThreads_
     
     // Capabilities
     int maxConcurrency_;
