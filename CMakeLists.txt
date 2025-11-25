@@ -148,6 +148,8 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
 
   set(CAPABILITIES_PROTO "${PALANTIR_PROTO_DIR}/palantir/capabilities.proto")
   set(XYSINE_PROTO "${PALANTIR_PROTO_DIR}/palantir/xysine.proto")
+  set(ENVELOPE_PROTO "${PALANTIR_PROTO_DIR}/palantir/envelope.proto")
+  set(ERROR_PROTO "${PALANTIR_PROTO_DIR}/palantir/error.proto")
 
   if(EXISTS "${CAPABILITIES_PROTO}")
     add_custom_command(
@@ -177,6 +179,34 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     )
   endif()
 
+  if(EXISTS "${ENVELOPE_PROTO}")
+    add_custom_command(
+      OUTPUT
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/envelope.pb.cc"
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/envelope.pb.h"
+      COMMAND "${PROTOC_EXECUTABLE}"
+        --proto_path="${PALANTIR_PROTO_DIR}"
+        --cpp_out="${PALANTIR_PROTO_OUT_DIR}"
+        "${ENVELOPE_PROTO}"
+      DEPENDS "${ENVELOPE_PROTO}"
+      COMMENT "Generating C++ from Palantir envelope.proto"
+    )
+  endif()
+
+  if(EXISTS "${ERROR_PROTO}")
+    add_custom_command(
+      OUTPUT
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/error.pb.cc"
+        "${PALANTIR_PROTO_OUT_DIR}/palantir/error.pb.h"
+      COMMAND "${PROTOC_EXECUTABLE}"
+        --proto_path="${PALANTIR_PROTO_DIR}"
+        --cpp_out="${PALANTIR_PROTO_OUT_DIR}"
+        "${ERROR_PROTO}"
+      DEPENDS "${ERROR_PROTO}"
+      COMMENT "Generating C++ from Palantir error.proto"
+    )
+  endif()
+
   # Build proto library with all available proto files
   set(PROTO_SOURCES)
   if(EXISTS "${CAPABILITIES_PROTO}")
@@ -184,6 +214,12 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
   endif()
   if(EXISTS "${XYSINE_PROTO}")
     list(APPEND PROTO_SOURCES "${PALANTIR_PROTO_OUT_DIR}/palantir/xysine.pb.cc")
+  endif()
+  if(EXISTS "${ENVELOPE_PROTO}")
+    list(APPEND PROTO_SOURCES "${PALANTIR_PROTO_OUT_DIR}/palantir/envelope.pb.cc")
+  endif()
+  if(EXISTS "${ERROR_PROTO}")
+    list(APPEND PROTO_SOURCES "${PALANTIR_PROTO_OUT_DIR}/palantir/error.pb.cc")
   endif()
 
   if(PROTO_SOURCES)
