@@ -13,6 +13,7 @@ add_executable(bedrock_tests
   test_math.cpp
   # Palantir tests (only when transport deps enabled)
   $<$<BOOL:${BEDROCK_WITH_TRANSPORT_DEPS}>:palantir/CapabilitiesService_test.cpp>
+  $<$<BOOL:${BEDROCK_WITH_TRANSPORT_DEPS}>:palantir/EnvelopeHelpers_test.cpp>
 )
 
 target_link_libraries(bedrock_tests
@@ -26,12 +27,19 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
   target_link_libraries(bedrock_tests PRIVATE
     bedrock_capabilities_service
     bedrock_palantir_proto
+    bedrock_palantir_server
   )
   target_compile_definitions(bedrock_tests PRIVATE BEDROCK_WITH_TRANSPORT_DEPS)
   target_include_directories(bedrock_tests PRIVATE
     ${CMAKE_BINARY_DIR}/generated/palantir
+    ${CMAKE_SOURCE_DIR}/src
   )
 endif()
 
 include(GoogleTest)
 gtest_discover_tests(bedrock_tests)
+
+# Integration tests (only when transport deps enabled)
+if(BEDROCK_WITH_TRANSPORT_DEPS)
+    add_subdirectory(integration)
+endif()

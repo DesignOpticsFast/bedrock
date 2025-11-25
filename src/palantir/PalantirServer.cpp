@@ -14,6 +14,7 @@
 #include "palantir/xysine.pb.h"
 #include "palantir/envelope.pb.h"
 #include "palantir/error.pb.h"
+#include "EnvelopeHelpers.hpp"
 #endif
 
 PalantirServer::PalantirServer(QObject *parent)
@@ -119,8 +120,11 @@ void PalantirServer::onNewConnection()
 {
     QLocalSocket* client = server_->nextPendingConnection();
     if (!client) {
+        qDebug() << "[SERVER] onNewConnection: ERROR - no pending connection";
         return;
     }
+    
+    qDebug() << "[SERVER] onNewConnection: new client" << client << ", state=" << client->state();
     
     // Connect client signals
     connect(client, &QLocalSocket::disconnected, this, &PalantirServer::onClientDisconnected);
@@ -130,10 +134,11 @@ void PalantirServer::onNewConnection()
     {
         std::lock_guard<std::mutex> lock(clientBuffersMutex_);
         clientBuffers_[client] = QByteArray();
+        qDebug() << "[SERVER] onNewConnection: client added to buffers map, map size=" << clientBuffers_.size();
     }
     
     emit clientConnected();
-    qDebug() << "Client connected";
+    qDebug() << "[SERVER] onNewConnection: Client connected signal emitted";
 }
 
 void PalantirServer::onClientDisconnected()
@@ -173,92 +178,25 @@ void PalantirServer::onClientReadyRead()
 {
     QLocalSocket* client = qobject_cast<QLocalSocket*>(sender());
     if (!client) {
+        qDebug() << "[SERVER] onClientReadyRead: ERROR - no client";
         return;
     }
     
+    qDebug() << "[SERVER] onClientReadyRead: bytes available=" << client->bytesAvailable();
     parseIncomingData(client);
 }
 
 void PalantirServer::onHeartbeatTimer()
 {
-    // WP1: Heartbeat/Pong not yet implemented (requires Pong proto message)
+    // Heartbeat/Pong not yet implemented (requires Pong proto message)
     // Future: Send pong to all connected clients when Pong message is defined
     // For now, heartbeat timer is disabled or no-op
 }
 
-void PalantirServer::handleMessage(QLocalSocket* client, const QByteArray& message)
-{
-#ifdef BEDROCK_WITH_TRANSPORT_DEPS
-    // Sprint 4.5: Try new format first (with MessageType)
-    palantir::MessageType messageType;
-    QByteArray payload;
-    
-    if (readMessageWithType(client, messageType, payload)) {
-        // New format: dispatch by MessageType
-        switch (messageType) {
-            case palantir::MessageType::CAPABILITIES_REQUEST: {
-                palantir::CapabilitiesRequest request;
-                if (request.ParseFromArray(payload.data(), payload.size())) {
-                    handleCapabilitiesRequest(client);
-                } else {
-                    sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
-                                     "Failed to parse CapabilitiesRequest");
-                }
-                return;
-            }
-            case palantir::MessageType::XY_SINE_REQUEST: {
-                palantir::XYSineRequest request;
-                if (request.ParseFromArray(payload.data(), payload.size())) {
-                    handleXYSineRequest(client, request);
-                } else {
-                    sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
-                                     "Failed to parse XYSineRequest");
-                }
-                return;
-            }
-            case palantir::MessageType::ERROR_RESPONSE:
-                // Server should not receive ErrorResponse
-                qDebug() << "Server received ErrorResponse (unexpected)";
-                return;
-            default:
-                sendErrorResponse(client, palantir::ErrorCode::UNKNOWN_MESSAGE_TYPE,
-                                 QString("Unknown message type: %1").arg(static_cast<int>(messageType)));
-                return;
-        }
-    }
-    
-    // Backward compatibility: try old format (no MessageType)
-    // Log deprecation warning
-    static bool deprecationWarningLogged = false;
-    if (!deprecationWarningLogged) {
-        qWarning() << "DEPRECATED: Received message in old format (no MessageType). "
-                   << "This format will be removed in Sprint 4.6. Please upgrade to new format.";
-        deprecationWarningLogged = true;
-    }
-    
-    // Try to parse as XYSineRequest (check before CapabilitiesRequest for specificity)
-    palantir::XYSineRequest xySineRequest;
-    if (xySineRequest.ParseFromArray(message.data(), message.size())) {
-        handleXYSineRequest(client, xySineRequest);
-        return;
-    }
-    
-    // Try to parse as CapabilitiesRequest
-    palantir::CapabilitiesRequest request;
-    if (request.ParseFromArray(message.data(), message.size())) {
-        handleCapabilitiesRequest(client);
-        return;
-    }
-    
-    // Unknown message format
-    sendErrorResponse(client, palantir::ErrorCode::UNKNOWN_MESSAGE_TYPE,
-                     "Failed to parse message (unknown format)");
-#else
-    qDebug() << "Message received but transport deps disabled";
-#endif
-}
+// Legacy handleMessage() removed - envelope-based transport only
+// All message handling now done via parseIncomingData() -> extractMessage()
 
-// WP1: StartJob handler disabled (proto message not yet defined)
+// StartJob handler disabled (proto message not yet defined)
 // Future: Re-enable when StartJob proto is added
 /*
 void PalantirServer::handleStartJob(QLocalSocket* client, const palantir::StartJob& startJob)
@@ -305,16 +243,20 @@ void PalantirServer::handleStartJob(QLocalSocket* client, const palantir::StartJ
     
     jobThreads_[jobId] = std::move(jobThread);
     
-    qDebug() << "Started job:" << jobId;
+    // Job start logic commented out (requires StartJob proto message)
 }
 */
 
 void PalantirServer::handleCapabilitiesRequest(QLocalSocket* client)
 {
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
+    qDebug() << "[SERVER] handleCapabilitiesRequest: starting";
     bedrock::palantir::CapabilitiesService service;
     palantir::CapabilitiesResponse response = service.getCapabilities();
+    qDebug() << "[SERVER] handleCapabilitiesRequest: got capabilities, server_version=" << response.capabilities().server_version().c_str();
+    qDebug() << "[SERVER] handleCapabilitiesRequest: calling sendMessage...";
     sendMessage(client, palantir::MessageType::CAPABILITIES_RESPONSE, response);
+    qDebug() << "[SERVER] handleCapabilitiesRequest: sendMessage returned";
 #else
     qWarning() << "Capabilities requested but transport deps disabled";
 #endif
@@ -379,7 +321,7 @@ void PalantirServer::computeXYSine(const palantir::XYSineRequest& request, std::
     }
 }
 
-// WP1: Ping/Pong handler disabled (proto message not yet defined)
+// Ping/Pong handler disabled (proto message not yet defined)
 // Future: Re-enable when Pong proto is added
 /*
 void PalantirServer::handlePing(QLocalSocket* client)
@@ -569,49 +511,63 @@ void PalantirServer::sendMessage(QLocalSocket* client, palantir::MessageType typ
         return;
     }
     
-    // Verify client is still in our tracking (optional safety check)
-    {
-        std::lock_guard<std::mutex> lock(clientBuffersMutex_);
-        if (clientBuffers_.find(client) == clientBuffers_.end()) {
-            qDebug() << "Attempted to send message to unknown client";
-            return;
-        }
-    }
+    // Note: Removed clientBuffers_ map check to avoid deadlock.
+    // We rely on socket state check above. If client is connected,
+    // it's safe to write to it.
     
-    // Serialize message
-    std::string serialized;
-    if (!message.SerializeToString(&serialized)) {
-        qDebug() << "Failed to serialize message";
+    qDebug() << "[SERVER] sendMessage: type=" << static_cast<int>(type) << ", client=" << client;
+    
+    // Create envelope from message
+    std::string envelopeError;
+    auto envelope = bedrock::palantir::makeEnvelope(type, message, {}, &envelopeError);
+    
+    if (!envelope.has_value()) {
+        qDebug() << "[SERVER] sendMessage: ERROR - failed to create envelope:" << envelopeError.c_str();
         sendErrorResponse(client, palantir::ErrorCode::INTERNAL_ERROR, 
-                         "Failed to serialize message");
+                         QString("Failed to create envelope: %1").arg(envelopeError.c_str()));
         return;
     }
     
+    qDebug() << "[SERVER] sendMessage: envelope created, version=" << envelope->version() << ", type=" << static_cast<int>(envelope->type());
+    
+    // Serialize envelope
+    std::string serialized;
+    if (!envelope->SerializeToString(&serialized)) {
+        qDebug() << "[SERVER] sendMessage: ERROR - failed to serialize envelope";
+        sendErrorResponse(client, palantir::ErrorCode::INTERNAL_ERROR, 
+                         "Failed to serialize MessageEnvelope");
+        return;
+    }
+    
+    qDebug() << "[SERVER] sendMessage: serialized size=" << serialized.size();
+    
     // Check size limit
     if (serialized.size() > MAX_MESSAGE_SIZE) {
-        qDebug() << "Message too large:" << serialized.size();
+        qDebug() << "[SERVER] sendMessage: ERROR - envelope too large:" << serialized.size();
         sendErrorResponse(client, palantir::ErrorCode::MESSAGE_TOO_LARGE,
-                         QString("Message size %1 exceeds limit %2")
+                         QString("Envelope size %1 exceeds limit %2")
                          .arg(serialized.size()).arg(MAX_MESSAGE_SIZE));
         return;
     }
     
-    // Create length-prefixed message with MessageType
+    // Create length-prefixed message: [4-byte length][serialized MessageEnvelope]
     QByteArray data;
-    uint32_t totalLength = static_cast<uint32_t>(serialized.size() + 1); // +1 for MessageType byte
-    uint8_t typeByte = static_cast<uint8_t>(type);
+    uint32_t totalLength = static_cast<uint32_t>(serialized.size());
     
     // Write length (little-endian, 4 bytes)
     data.append(reinterpret_cast<const char*>(&totalLength), 4);
-    // Write MessageType (1 byte)
-    data.append(reinterpret_cast<const char*>(&typeByte), 1);
-    // Write serialized message
+    // Write serialized envelope
     data.append(serialized.data(), serialized.size());
     
+    qDebug() << "[SERVER] sendMessage: writing" << data.size() << "bytes to client";
     // Send data
     qint64 written = client->write(data);
+    qDebug() << "[SERVER] sendMessage: wrote" << written << "bytes";
+    
     if (written != data.size()) {
-        qDebug() << "Failed to send complete message";
+        qDebug() << "[SERVER] sendMessage: ERROR - failed to send complete message (wrote" << written << "of" << data.size() << "bytes)";
+    } else {
+        qDebug() << "[SERVER] sendMessage: SUCCESS - message sent";
     }
 }
 
@@ -627,136 +583,148 @@ void PalantirServer::sendErrorResponse(QLocalSocket* client, palantir::ErrorCode
     sendMessage(client, palantir::MessageType::ERROR_RESPONSE, error);
 }
 
-bool PalantirServer::readMessageWithType(QLocalSocket* client, palantir::MessageType& outType, QByteArray& outPayload)
+bool PalantirServer::extractMessage(QByteArray& buffer, palantir::MessageType& outType, QByteArray& outPayload, QString* outError)
 {
-    if (!client) {
-        return false;
-    }
-    
-    // Thread-safe access to client buffer
-    std::lock_guard<std::mutex> lock(clientBuffersMutex_);
-    auto it = clientBuffers_.find(client);
-    if (it == clientBuffers_.end()) {
-        return false; // Client not found (may have disconnected)
-    }
-    QByteArray& buffer = it->second;
-    
-    // Need at least 5 bytes: 4-byte length + 1-byte MessageType
-    if (buffer.size() < 5) {
-        return false;
+    // Need at least 4 bytes for length prefix
+    if (buffer.size() < 4) {
+        return false; // Incomplete frame, need more data
     }
     
     // Read length (little-endian)
-    uint32_t totalLength;
-    std::memcpy(&totalLength, buffer.data(), 4);
+    uint32_t envelopeLength;
+    std::memcpy(&envelopeLength, buffer.data(), 4);
     
     // Check size limit
-    if (totalLength > MAX_MESSAGE_SIZE + 1) { // +1 for MessageType byte
-        qDebug() << "Message length exceeds limit:" << totalLength;
-        sendErrorResponse(client, palantir::ErrorCode::MESSAGE_TOO_LARGE,
-                         QString("Message length %1 exceeds limit %2")
-                         .arg(totalLength).arg(MAX_MESSAGE_SIZE + 1));
+    if (envelopeLength > MAX_MESSAGE_SIZE) {
+        if (outError) {
+            *outError = QString("Envelope length %1 exceeds limit %2")
+                       .arg(envelopeLength).arg(MAX_MESSAGE_SIZE);
+        }
         buffer.clear(); // Clear buffer to prevent further parsing
-        return false;
+        return false; // Hard error
     }
     
-    // Check if we have the complete message
-    if (buffer.size() < 4 + totalLength) {
-        return false;
+    // Check if we have the complete envelope
+    if (buffer.size() < 4 + envelopeLength) {
+        return false; // Incomplete frame, need more data
     }
     
-    // Read MessageType (1 byte after length)
-    uint8_t typeByte = static_cast<uint8_t>(buffer[4]);
-    outType = static_cast<palantir::MessageType>(typeByte);
+    // Extract envelope bytes (after length prefix)
+    QByteArray envelopeBytes = buffer.mid(4, envelopeLength);
+    buffer.remove(0, 4 + envelopeLength);
     
-    // Read payload (everything after MessageType)
-    outPayload = buffer.mid(5, totalLength - 1);
-    buffer.remove(0, 4 + totalLength);
+    // Parse envelope
+    ::palantir::MessageEnvelope envelope;
+    std::string parseError;
+    if (!bedrock::palantir::parseEnvelope(
+            std::string(envelopeBytes.data(), envelopeBytes.size()),
+            envelope,
+            &parseError)) {
+        if (outError) {
+            *outError = QString("Malformed envelope: %1").arg(parseError.c_str());
+        }
+        return false; // Hard error
+    }
     
-    return true;
+    // Validate envelope version
+    if (envelope.version() != 1) {
+        if (outError) {
+            *outError = QString("Invalid envelope version: %1").arg(envelope.version());
+        }
+        return false; // Hard error
+    }
+    
+    // Extract type and payload
+    outType = envelope.type();
+    outPayload = QByteArray(envelope.payload().data(), envelope.payload().size());
+    
+    return true; // Success
 }
 
-// Backward compatibility: read old format (no MessageType, just length + payload)
-// This function is kept for backward compatibility but is deprecated
-// It reads from the buffer directly (used by parseIncomingData for old format)
-QByteArray PalantirServer::readMessage(QLocalSocket* client)
-{
-    if (!client) {
-        return QByteArray();
-    }
-    
-    // Thread-safe access to client buffer
-    std::lock_guard<std::mutex> lock(clientBuffersMutex_);
-    auto it = clientBuffers_.find(client);
-    if (it == clientBuffers_.end()) {
-        return QByteArray(); // Client not found (may have disconnected)
-    }
-    QByteArray& buffer = it->second;
-    
-    if (buffer.size() < 4) {
-        return QByteArray();
-    }
-    
-    uint32_t length;
-    std::memcpy(&length, buffer.data(), 4);
-    
-    // Check size limit
-    if (length > MAX_MESSAGE_SIZE) {
-        qDebug() << "Old-format message length exceeds limit:" << length;
-        buffer.clear();
-        return QByteArray();
-    }
-    
-    if (buffer.size() < 4 + length) {
-        return QByteArray();
-    }
-    
-    QByteArray message = buffer.mid(4, length);
-    buffer.remove(0, 4 + length);
-    
-    return message;
-}
+// Legacy readMessage() removed - envelope-based transport only
 #endif // BEDROCK_WITH_TRANSPORT_DEPS
 
 void PalantirServer::parseIncomingData(QLocalSocket* client)
 {
     if (!client) {
+        qDebug() << "[SERVER] parseIncomingData: ERROR - no client";
         return;
     }
     
     // Read all available data first
     QByteArray newData = client->readAll();
-    if (newData.isEmpty()) {
-        return;
-    }
+    qDebug() << "[SERVER] parseIncomingData: read" << newData.size() << "bytes from client";
     
-    // Thread-safe access to client buffer
-    std::lock_guard<std::mutex> lock(clientBuffersMutex_);
-    auto it = clientBuffers_.find(client);
-    if (it == clientBuffers_.end()) {
-        // Client not found (may have disconnected)
+    if (newData.isEmpty()) {
+        qDebug() << "[SERVER] parseIncomingData: no data available";
         return;
     }
-    QByteArray& buffer = it->second;
-    buffer += newData;
     
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
-    // Try new format first (5 bytes minimum: 4-byte length + 1-byte MessageType)
-    // Note: readMessageWithType will lock clientBuffersMutex_ internally
+    // Parse envelope-based messages
+    // Lock scope is narrowed to buffer manipulation only; dispatch happens outside lock
     while (true) {
         palantir::MessageType messageType;
         QByteArray payload;
-        if (!readMessageWithType(client, messageType, payload)) {
-            break; // Not enough data or client disconnected
+        QString extractError;
+        
+        // === CRITICAL SECTION: buffer manipulation only ===
+        {
+            std::lock_guard<std::mutex> lock(clientBuffersMutex_);
+            auto it = clientBuffers_.find(client);
+            if (it == clientBuffers_.end()) {
+                // Client not found (may have disconnected)
+                qDebug() << "[SERVER] parseIncomingData: ERROR - client not in buffers map";
+                return;
+            }
+            QByteArray& buffer = it->second;
+            
+            // Append new data only once per call
+            if (!newData.isEmpty()) {
+                buffer += newData;
+                newData.clear();
+                qDebug() << "[SERVER] parseIncomingData: buffer size now=" << buffer.size();
+            }
+            
+            // Extract message from buffer (no locking inside extractMessage)
+            qDebug() << "[SERVER] parseIncomingData: attempting to extract message...";
+            if (!extractMessage(buffer, messageType, payload, &extractError)) {
+                // Check if it's a hard error or just incomplete data
+                if (!extractError.isEmpty()) {
+                    // Hard error - will handle outside lock
+                    qDebug() << "[SERVER] parseIncomingData: extractMessage error:" << extractError;
+                } else {
+                    // Incomplete frame - need more data, wait for next readyRead
+                    qDebug() << "[SERVER] parseIncomingData: incomplete message, waiting for more data";
+                }
+                break; // Exit critical section
+            }
+            
+            qDebug() << "[SERVER] parseIncomingData: extracted message, type=" << static_cast<int>(messageType) << ", payload size=" << payload.size();
+        }
+        // === LOCK RELEASED HERE ===
+        
+        // Handle extraction errors outside lock
+        if (!extractError.isEmpty()) {
+            if (extractError.contains("exceeds limit")) {
+                sendErrorResponse(client, palantir::ErrorCode::MESSAGE_TOO_LARGE, extractError);
+            } else {
+                sendErrorResponse(client, palantir::ErrorCode::INVALID_MESSAGE_FORMAT, extractError);
+            }
+            continue; // Try to extract next message if available
         }
         
-        // Dispatch by MessageType
+        // === DISPATCH WITHOUT HOLDING MUTEX ===
         switch (messageType) {
             case palantir::MessageType::CAPABILITIES_REQUEST: {
+                qDebug() << "[SERVER] parseIncomingData: handling CAPABILITIES_REQUEST";
                 palantir::CapabilitiesRequest request;
                 if (request.ParseFromArray(payload.data(), payload.size())) {
+                    qDebug() << "[SERVER] parseIncomingData: parsed CapabilitiesRequest, calling handleCapabilitiesRequest";
                     handleCapabilitiesRequest(client);
+                    qDebug() << "[SERVER] parseIncomingData: handleCapabilitiesRequest returned";
                 } else {
+                    qDebug() << "[SERVER] parseIncomingData: ERROR - failed to parse CapabilitiesRequest";
                     sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
                                      "Failed to parse CapabilitiesRequest");
                 }
@@ -781,60 +749,9 @@ void PalantirServer::parseIncomingData(QLocalSocket* client)
                 continue;
         }
     }
-    
-    // Fallback: try old format (backward compatibility)
-    // Note: readMessage will lock clientBuffersMutex_ internally
-    while (true) {
-        QByteArray message = readMessage(client);
-        if (message.isEmpty()) {
-            break;
-        }
-        handleMessage(client, message);
-    }
 #else
-    // Old format only (when transport deps disabled)
-    // Read data first
-    QByteArray newData = client->readAll();
-    if (newData.isEmpty()) {
-        return;
-    }
-    
-    // Thread-safe access to client buffer
-    std::lock_guard<std::mutex> lock(clientBuffersMutex_);
-    auto it = clientBuffers_.find(client);
-    if (it == clientBuffers_.end()) {
-        return; // Client not found (may have disconnected)
-    }
-    QByteArray& buffer = it->second;
-    buffer += newData;
-    
-    // Process messages (parse directly from buffer while holding lock)
-    // Extract messages to process outside the lock
-    std::vector<QByteArray> messagesToProcess;
-    while (buffer.size() >= 4) {
-        uint32_t length;
-        std::memcpy(&length, buffer.data(), 4);
-        
-        if (length > MAX_MESSAGE_SIZE) {
-            qDebug() << "Old-format message length exceeds limit:" << length;
-            buffer.clear();
-            break;
-        }
-        
-        if (buffer.size() < 4 + length) {
-            break; // Not enough data yet
-        }
-        
-        QByteArray message = buffer.mid(4, length);
-        buffer.remove(0, 4 + length);
-        messagesToProcess.push_back(message);
-    }
-    // Lock is released here when lock goes out of scope
-    
-    // Process messages outside the lock
-    for (const QByteArray& message : messagesToProcess) {
-        handleMessage(client, message);
-    }
+    // Transport deps disabled - envelope-based transport not available
+    qDebug() << "Transport deps disabled - cannot process envelope-based messages";
 #endif
 }
 

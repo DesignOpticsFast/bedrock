@@ -6,6 +6,22 @@ This changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ---
 
+## [0.0.4] – 2025-01-25
+### Bedrock (Backend)
+- **Envelope-Based Palantir Transport**: Migrated to envelope-based wire format for all IPC communication. All messages now use `MessageEnvelope` protobuf with version, type, payload, and metadata fields. Wire format: `[4-byte length][serialized MessageEnvelope]`. Replaced legacy `[length][type][payload]` format.
+- **Deadlock Fix**: Eliminated deadlock in `parseIncomingData()` by refactoring to `extractMessage()` helper (no locking) and narrowing lock scope in buffer manipulation. Removed mutex from `sendMessage()` to prevent nested locking. Transport layer now safe under concurrency.
+- **Envelope Helpers**: Added reusable `makeEnvelope()` and `parseEnvelope()` helpers for creating and parsing envelope messages. Helpers include version validation, type checking, and error reporting.
+- **Integration Test Harness**: Added comprehensive integration test framework with `IntegrationTestServerFixture` (in-process server) and `IntegrationTestClient` (minimal test client). Framework validates end-to-end envelope transport for RPCs.
+- **Capabilities RPC Integration Test**: End-to-end test validating Capabilities request/response cycle using envelope transport. Test confirms server processes requests and sends responses correctly.
+- **XY Sine RPC Integration Test**: End-to-end test validating XY Sine computation with mathematical correctness checks. Test validates envelope transport for numeric RPCs with repeated double fields and confirms server computation matches expected sine wave formula.
+
+### Phoenix (Frontend)
+- **Envelope-Based Palantir Protocol**: Client-side migration to envelope-based protocol matching Bedrock server. All RPCs now use envelope-based transport with proper versioning and extensibility.
+- **IPC Hardening**: Eliminated deadlocks in transport layer by refactoring lock scope. Transport layer now safe under concurrency.
+- **Envelope Helpers**: Added reusable `makeEnvelope()` and `parseEnvelope()` helpers matching server-side implementation.
+
+---
+
 ## [v0.1.0-sprint1] – 2025-10-08
 ### Status
 **Sprint 1 Complete — Baseline Release**

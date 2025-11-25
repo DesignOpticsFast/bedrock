@@ -48,8 +48,7 @@ private slots:
     void onHeartbeatTimer();
 
 private:
-    // Message handling
-    void handleMessage(QLocalSocket* client, const QByteArray& message);
+    // Message handling (legacy handleMessage removed - envelope-based transport only)
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
     void handleCapabilitiesRequest(QLocalSocket* client);
     void handleXYSineRequest(QLocalSocket* client, const palantir::XYSineRequest& request);
@@ -60,23 +59,22 @@ private:
     // void handleCancel(QLocalSocket* client, const palantir::Cancel& cancel);
     // void handlePing(QLocalSocket* client);
     
-    // Job processing (WP1: disabled - proto messages not yet defined)
+    // Job processing (disabled - proto messages not yet defined)
     // Future: Re-enable when ComputeSpec, ResultMeta, etc. are defined
     // void processJob(const QString& jobId, const palantir::ComputeSpec& spec);
     // void sendProgress(const QString& jobId, double progress, const QString& status);
     // void sendResult(const QString& jobId, const palantir::ResultMeta& meta);
     // void sendDataChunk(const QString& jobId, const QByteArray& data, int chunkIndex, int totalChunks);
     
-    // XY Sine computation (WP1: disabled)
+    // XY Sine computation (implemented via handleXYSineRequest)
     // void computeXYSine(const palantir::ComputeSpec& spec, std::vector<double>& xValues, std::vector<double>& yValues);
     
     // Protocol helpers
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
     void sendMessage(QLocalSocket* client, palantir::MessageType type, const google::protobuf::Message& message);
     void sendErrorResponse(QLocalSocket* client, palantir::ErrorCode errorCode, const QString& message, const QString& details = QString());
-    bool readMessageWithType(QLocalSocket* client, palantir::MessageType& outType, QByteArray& outPayload);
-    // Backward compatibility: read old format (no MessageType)
-    QByteArray readMessage(QLocalSocket* client);
+    bool extractMessage(QByteArray& buffer, palantir::MessageType& outType, QByteArray& outPayload, QString* outError = nullptr);
+    // Legacy readMessage() removed - envelope-based transport only
 #endif
     void parseIncomingData(QLocalSocket* client);
     
@@ -94,7 +92,7 @@ private:
     
     std::map<QString, QLocalSocket*> jobClients_;
     
-    // Job tracking (WP1: disabled - proto messages not yet defined)
+    // Job tracking (disabled - proto messages not yet defined)
     // std::map<QString, palantir::ComputeSpec> activeJobs_;
     std::map<QString, std::atomic<bool>> jobCancelled_;
     

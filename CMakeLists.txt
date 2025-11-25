@@ -245,6 +245,8 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     find_library(ABSL_LOG_INTERNAL_CONDITIONS_LIB absl_log_internal_conditions PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
     find_library(ABSL_LOG_INTERNAL_MESSAGE_LIB absl_log_internal_message PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
     find_library(ABSL_LOG_INTERNAL_NULLGUARD_LIB absl_log_internal_nullguard PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_HASH_LIB absl_hash PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
+    find_library(ABSL_LOG_INTERNAL_FORMAT_LIB absl_log_internal_format PATHS /opt/homebrew/opt/abseil/lib NO_DEFAULT_PATH)
     
     set(ABSEIL_LIBS)
     if(ABSL_DIE_IF_NULL_LIB)
@@ -267,6 +269,12 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     endif()
     if(ABSL_LOG_INTERNAL_NULLGUARD_LIB)
       list(APPEND ABSEIL_LIBS ${ABSL_LOG_INTERNAL_NULLGUARD_LIB})
+    endif()
+    if(ABSL_HASH_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_HASH_LIB})
+    endif()
+    if(ABSL_LOG_INTERNAL_FORMAT_LIB)
+      list(APPEND ABSEIL_LIBS ${ABSL_LOG_INTERNAL_FORMAT_LIB})
     endif()
     
     if(ABSEIL_LIBS)
@@ -301,6 +309,8 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
     
     add_library(bedrock_palantir_server STATIC
       src/palantir/PalantirServer.cpp
+      src/palantir/EnvelopeHelpers.cpp
+      src/palantir/EnvelopeHelpers.hpp
     )
     
     target_include_directories(bedrock_palantir_server PUBLIC
