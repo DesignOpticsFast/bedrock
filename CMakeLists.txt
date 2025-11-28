@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Bedrock
-  VERSION 0.0.1
+  VERSION 0.3.0
   DESCRIPTION "AI-native optical design core"
   LANGUAGES CXX)
 
@@ -56,17 +56,20 @@ target_include_directories(bedrock_som
 # ---------------------------------------
 # Sprint 1: OpenCascade + geom target
 # ---------------------------------------
+# OpenCASCADE is optional - set BEDROCK_WITH_OPENCASCADE=ON to enable
 # Homebrew installs OCCT at /opt/homebrew/opt/opencascade
 # Ensure your environment has:
 #   export CMAKE_PREFIX_PATH="/opt/homebrew/opt/opencascade:${CMAKE_PREFIX_PATH}"
 #   export OpenCASCADE_DIR="/opt/homebrew/opt/opencascade/lib/cmake/opencascade-7.9.1"
-option(BEDROCK_WITH_OCCT "Build Bedrock OCCT components" ON)
+option(BEDROCK_WITH_OPENCASCADE "Enable OpenCASCADE geometry backend" OFF)
+option(BEDROCK_WITH_OCCT "Build Bedrock OCCT components" OFF)  # Legacy alias, deprecated
 
-if(BEDROCK_WITH_OCCT)
+# Support both option names for backward compatibility
+if(BEDROCK_WITH_OPENCASCADE OR BEDROCK_WITH_OCCT)
   find_package(OpenCASCADE REQUIRED)
   set(BUILD_WITH_OCCT ON)
 else()
-  message(STATUS "Building Bedrock without OCCT support")
+  message(STATUS "Building Bedrock without OCCT support (use -DBEDROCK_WITH_OPENCASCADE=ON to enable)")
   set(BUILD_WITH_OCCT OFF)
 endif()
 
@@ -102,7 +105,8 @@ target_include_directories(bedrock_engine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 target_link_libraries(bedrock_engine PUBLIC
-  bedrock_geom)  # brings in OCCT + bedrock_som
+  bedrock_som
+  $<$<BOOL:${BUILD_WITH_OCCT}>:bedrock_geom>)  # Conditionally link OCCT if available
 
 # ---------------------------------------
 # Plugin interface for external consumers (like Phoenix)
