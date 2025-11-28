@@ -374,5 +374,11 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
 endif()
 
 # --- Sprint 1: smoke (manual run)
-add_executable(bedrock_smoke_step tests/smoke_step_main.cpp)
-target_link_libraries(bedrock_smoke_step PRIVATE bedrock_engine)
+# smoke_step test requires OCCT
+if(BUILD_WITH_OCCT)
+  add_executable(bedrock_smoke_step tests/smoke_step_main.cpp)
+  target_link_libraries(bedrock_smoke_step PRIVATE bedrock_engine)
+  add_test(NAME bedrock_smoke_step COMMAND bedrock_smoke_step)
+else()
+  message(STATUS "Skipping bedrock_smoke_step test - requires OCCT (use -DBEDROCK_WITH_OPENCASCADE=ON to enable)")
+endif()
