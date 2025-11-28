@@ -127,6 +127,31 @@ cd build
 ctest --output-on-failure
 ```
 
+## macOS (Apple Silicon) OpenMP Notes
+
+Bedrock requires OpenMP for parallel execution in its compute kernel.
+
+macOS does not ship OpenMP with AppleClang.  
+Install via Homebrew:
+
+    brew install libomp
+
+**Qt Creator users:** Select a CMake preset:
+
+- macOS Debug (Apple Silicon)
+
+- macOS Release (Apple Silicon)
+
+OpenMP configuration is automatic via:
+
+1. CMakePresets.json (for IDE/CLI builds)
+
+2. Fallback auto-detection block in CMakeLists.txt
+
+---
+
+## BEDROCK_WITH_TRANSPORT_DEPS Explained
+
 ### Engine-Only Build (No Transport)
 
 ```bash

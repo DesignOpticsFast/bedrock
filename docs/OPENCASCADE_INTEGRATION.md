@@ -174,6 +174,22 @@ OCCT integration will be addressed in future sprints.
 
 ---
 
+## Notes for macOS Developers
+
+OpenMP is required for Bedrock's compute kernel on macOS.
+
+macOS cannot auto-detect OpenMP when using AppleClang. Bedrock includes:
+
+- CMakePresets.json with explicit OpenMP hints (for Qt Creator and CLI)
+
+- Fallback detection logic in CMakeLists.txt for Homebrew libomp
+
+No manual configuration is required beyond:
+
+    brew install libomp
+
+---
+
 ## Related Documentation
 
 - **[BEDROCK_ARCHITECTURE.md](BEDROCK_ARCHITECTURE.md)** - Overall architecture

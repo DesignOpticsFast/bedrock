@@ -24,6 +24,21 @@ option(BEDROCK_WITH_TRANSPORT_DEPS "Enable Palantir/transport deps" OFF)
 # ---------------------------------------
 # OpenMP for multithreading
 # ---------------------------------------
+# ---------------------------------------------
+# macOS OpenMP fallback (AppleClang + Homebrew)
+# ---------------------------------------------
+if(APPLE AND NOT DEFINED OpenMP_CXX_FLAGS)
+    if(EXISTS "/opt/homebrew/opt/libomp")
+        # Apple Silicon (M1/M2/M3)
+        set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include" CACHE STRING "OpenMP C++ compiler flags")
+        set(OpenMP_CXX_LIB_NAMES "omp" CACHE STRING "OpenMP library name")
+        set(OpenMP_omp_LIBRARY "/opt/homebrew/opt/libomp/lib/libomp.dylib" CACHE FILEPATH "Path to OpenMP library")
+        message(STATUS "Bedrock: Auto-detected Homebrew libomp at /opt/homebrew")
+    else()
+        message(WARNING "Bedrock: libomp not found. Install with: brew install libomp")
+    endif()
+endif()
+
 find_package(OpenMP REQUIRED)
 if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
