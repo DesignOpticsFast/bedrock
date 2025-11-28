@@ -14,6 +14,7 @@ add_executable(bedrock_tests
   # Palantir tests (only when transport deps enabled)
   $<$<BOOL:${BEDROCK_WITH_TRANSPORT_DEPS}>:palantir/CapabilitiesService_test.cpp>
   $<$<BOOL:${BEDROCK_WITH_TRANSPORT_DEPS}>:palantir/EnvelopeHelpers_test.cpp>
+  $<$<BOOL:${BEDROCK_WITH_TRANSPORT_DEPS}>:palantir/ErrorResponse_test.cpp>
 )
 
 target_link_libraries(bedrock_tests

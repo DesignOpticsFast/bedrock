@@ -11,7 +11,7 @@ namespace palantir {
     
     // Hard-coded capabilities (future: may be dynamic based on available features)
     // Future: May read from configuration or detect dynamically
-    caps->set_server_version("bedrock-0.0.1");
+    caps->set_server_version("bedrock-0.3.0");
     caps->add_supported_features("xy_sine");
     
     return response;

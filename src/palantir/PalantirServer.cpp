@@ -193,8 +193,8 @@ void PalantirServer::onHeartbeatTimer()
     // For now, heartbeat timer is disabled or no-op
 }
 
-// Legacy handleMessage() removed - envelope-based transport only
-// All message handling now done via parseIncomingData() -> extractMessage()
+// Message handling uses envelope-based protocol only
+// All messages are wrapped in MessageEnvelope and handled via parseIncomingData() -> extractMessage()
 
 // StartJob handler disabled (proto message not yet defined)
 // Future: Re-enable when StartJob proto is added
@@ -247,6 +247,9 @@ void PalantirServer::handleStartJob(QLocalSocket* client, const palantir::StartJ
 }
 */
 
+// handleCapabilitiesRequest: RPC handler for Capabilities query
+// Validation: CapabilitiesRequest has no fields (empty message), so no parameter validation needed
+// If protobuf parsing fails, error is returned in parseIncomingData() before this handler is called
 void PalantirServer::handleCapabilitiesRequest(QLocalSocket* client)
 {
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
@@ -262,9 +265,49 @@ void PalantirServer::handleCapabilitiesRequest(QLocalSocket* client)
 #endif
 }
 
+// handleXYSineRequest: RPC handler for XY Sine computation
+// Validation rules (enforced at RPC boundary before compute logic):
+//   - samples: Must be >= 2 and <= 10,000,000 (DoS prevention)
+//   - frequency: Must be finite (no NaN/Inf), default 1.0 if 0.0
+//   - amplitude: Must be finite (no NaN/Inf), default 1.0 if 0.0
+//   - phase: Must be finite (no NaN/Inf), 0.0 is valid default
+// Error codes:
+//   - INVALID_PARAMETER_VALUE: Semantically invalid parameters (out of range, non-finite)
+//   - PROTOBUF_PARSE_ERROR: Returned in parseIncomingData() if protobuf parsing fails
 void PalantirServer::handleXYSineRequest(QLocalSocket* client, const palantir::XYSineRequest& request)
 {
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
+    // Validate request parameters at RPC boundary
+    // Note: proto3 provides default values (0.0 for double, 0 for int32)
+    // We apply defaults and validate before calling compute logic
+    
+    // Validation: samples range (DoS prevention)
+    int samples = request.samples() != 0 ? request.samples() : 1000;
+    if (samples < 2) {
+        sendErrorResponse(client, palantir::ErrorCode::INVALID_PARAMETER_VALUE,
+                         QString("Samples must be between 2 and 10,000,000 (got %1)").arg(samples),
+                         QString("Received samples=%1").arg(samples));
+        return;
+    }
+    if (samples > 10000000) {  // 10M samples max (reasonable limit)
+        sendErrorResponse(client, palantir::ErrorCode::INVALID_PARAMETER_VALUE,
+                         QString("Samples must be between 2 and 10,000,000 (got %1)").arg(samples),
+                         QString("Received samples=%1").arg(samples));
+        return;
+    }
+    
+    // Validation: frequency, amplitude, phase must be finite (not NaN or Inf)
+    double frequency = request.frequency() != 0.0 ? request.frequency() : 1.0;
+    double amplitude = request.amplitude() != 0.0 ? request.amplitude() : 1.0;
+    double phase = request.phase();  // 0.0 is valid default
+    if (!std::isfinite(frequency) || !std::isfinite(amplitude) || !std::isfinite(phase)) {
+        sendErrorResponse(client, palantir::ErrorCode::INVALID_PARAMETER_VALUE,
+                         "Frequency, amplitude, and phase must be finite numbers",
+                         QString("frequency=%1, amplitude=%2, phase=%3")
+                         .arg(frequency).arg(amplitude).arg(phase));
+        return;
+    }
+    
     // Compute XY Sine
     std::vector<double> xValues, yValues;
     computeXYSine(request, xValues, yValues);
@@ -504,7 +547,8 @@ void PalantirServer::sendMessage(QLocalSocket* client, palantir::MessageType typ
         return;
     }
     
-    // Check if client is still valid and connected (thread-safe check)
+    // Threading: This function runs on Qt event loop thread
+    // QLocalSocket operations are safe because we're on the socket's owner thread
     // Note: QLocalSocket::state() is thread-safe for reading
     if (client->state() != QLocalSocket::ConnectedState) {
         qDebug() << "Attempted to send message to disconnected client";
@@ -571,6 +615,14 @@ void PalantirServer::sendMessage(QLocalSocket* client, palantir::MessageType typ
     }
 }
 
+// sendErrorResponse: Centralized error response helper
+// Error codes used in Sprint 4.5:
+//   - INTERNAL_ERROR: Server-side failures (envelope creation, serialization)
+//   - MESSAGE_TOO_LARGE: Envelope size exceeds MAX_MESSAGE_SIZE (10MB)
+//   - INVALID_MESSAGE_FORMAT: Malformed envelope or extraction errors
+//   - PROTOBUF_PARSE_ERROR: Failed to parse request protobuf
+//   - UNKNOWN_MESSAGE_TYPE: Message type not recognized
+//   - INVALID_PARAMETER_VALUE: Request parameter validation failed (e.g., invalid samples)
 void PalantirServer::sendErrorResponse(QLocalSocket* client, palantir::ErrorCode errorCode, 
                                        const QString& message, const QString& details)
 {
@@ -594,7 +646,8 @@ bool PalantirServer::extractMessage(QByteArray& buffer, palantir::MessageType& o
     uint32_t envelopeLength;
     std::memcpy(&envelopeLength, buffer.data(), 4);
     
-    // Check size limit
+    // Check size limit before reading payload (fail fast, prevent DoS)
+    // MAX_MESSAGE_SIZE = 10MB - rejects oversize messages immediately
     if (envelopeLength > MAX_MESSAGE_SIZE) {
         if (outError) {
             *outError = QString("Envelope length %1 exceeds limit %2")
@@ -641,7 +694,9 @@ bool PalantirServer::extractMessage(QByteArray& buffer, palantir::MessageType& o
     return true; // Success
 }
 
-// Legacy readMessage() removed - envelope-based transport only
+// extractMessage() implements envelope-based protocol only:
+// Wire format: [4-byte length][serialized MessageEnvelope]
+// No legacy [length][type][payload] format support
 #endif // BEDROCK_WITH_TRANSPORT_DEPS
 
 void PalantirServer::parseIncomingData(QLocalSocket* client)
@@ -662,13 +717,17 @@ void PalantirServer::parseIncomingData(QLocalSocket* client)
     
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
     // Parse envelope-based messages
+    // Threading: This function runs on Qt event loop thread
     // Lock scope is narrowed to buffer manipulation only; dispatch happens outside lock
+    // This prevents holding mutex during message dispatch (which may call sendMessage)
     while (true) {
         palantir::MessageType messageType;
         QByteArray payload;
         QString extractError;
         
         // === CRITICAL SECTION: buffer manipulation only ===
+        // Lock protects clientBuffers_ map during append/extract operations
+        // Released before dispatch to avoid holding lock during handler execution
         {
             std::lock_guard<std::mutex> lock(clientBuffersMutex_);
             auto it = clientBuffers_.find(client);
@@ -715,6 +774,10 @@ void PalantirServer::parseIncomingData(QLocalSocket* client)
         }
         
         // === DISPATCH WITHOUT HOLDING MUTEX ===
+        // RPC boundary: Parse protobuf and validate before calling handlers
+        // Error codes:
+        //   - PROTOBUF_PARSE_ERROR: Protobuf deserialization failed (malformed payload)
+        //   - INVALID_PARAMETER_VALUE: Handler validates and rejects semantically invalid parameters
         switch (messageType) {
             case palantir::MessageType::CAPABILITIES_REQUEST: {
                 qDebug() << "[SERVER] parseIncomingData: handling CAPABILITIES_REQUEST";
@@ -726,17 +789,19 @@ void PalantirServer::parseIncomingData(QLocalSocket* client)
                 } else {
                     qDebug() << "[SERVER] parseIncomingData: ERROR - failed to parse CapabilitiesRequest";
                     sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
-                                     "Failed to parse CapabilitiesRequest");
+                                     "Failed to parse CapabilitiesRequest: malformed protobuf payload");
                 }
                 continue;
             }
             case palantir::MessageType::XY_SINE_REQUEST: {
                 palantir::XYSineRequest request;
                 if (request.ParseFromArray(payload.data(), payload.size())) {
+                    // RPC boundary: Validation happens in handleXYSineRequest()
                     handleXYSineRequest(client, request);
                 } else {
+                    qDebug() << "[SERVER] parseIncomingData: ERROR - failed to parse XYSineRequest";
                     sendErrorResponse(client, palantir::ErrorCode::PROTOBUF_PARSE_ERROR,
-                                     "Failed to parse XYSineRequest");
+                                     "Failed to parse XYSineRequest: malformed protobuf payload");
                 }
                 continue;
             }

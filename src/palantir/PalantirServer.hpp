@@ -20,6 +20,12 @@
 #include "CapabilitiesService.hpp"
 #endif
 
+// PalantirServer: Qt-based IPC server for Palantir protocol
+// Threading: All operations run on Qt's event loop thread (main thread)
+// - Socket I/O, message parsing, and request handling execute synchronously on event loop thread
+// - Worker thread infrastructure exists but is currently disabled (commented out)
+// - Mutexes protect shared data structures for future multi-threading support
+// See docs/THREADING.md for detailed threading model documentation
 class PalantirServer : public QObject
 {
     Q_OBJECT
@@ -48,7 +54,7 @@ private slots:
     void onHeartbeatTimer();
 
 private:
-    // Message handling (legacy handleMessage removed - envelope-based transport only)
+    // Message handling (envelope-based protocol only)
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
     void handleCapabilitiesRequest(QLocalSocket* client);
     void handleXYSineRequest(QLocalSocket* client, const palantir::XYSineRequest& request);
@@ -73,8 +79,10 @@ private:
 #ifdef BEDROCK_WITH_TRANSPORT_DEPS
     void sendMessage(QLocalSocket* client, palantir::MessageType type, const google::protobuf::Message& message);
     void sendErrorResponse(QLocalSocket* client, palantir::ErrorCode errorCode, const QString& message, const QString& details = QString());
+    // extractMessage() implements envelope-based protocol only:
+    // Wire format: [4-byte length][serialized MessageEnvelope]
+    // No legacy [length][type][payload] format support
     bool extractMessage(QByteArray& buffer, palantir::MessageType& outType, QByteArray& outPayload, QString* outError = nullptr);
-    // Legacy readMessage() removed - envelope-based transport only
 #endif
     void parseIncomingData(QLocalSocket* client);
     
@@ -87,6 +95,12 @@ private:
     std::atomic<bool> running_;
     
     // Client management (thread-safe access required)
+    // clientBuffersMutex_ protects clientBuffers_ map
+    // Invariant: When locked, clientBuffers_ map is in consistent state
+    // Currently all accesses are from event loop thread, but mutex provides:
+    // - Future-proofing for worker threads
+    // - Defensive programming
+    // - Clear documentation of shared data
     std::map<QLocalSocket*, QByteArray> clientBuffers_;
     std::mutex clientBuffersMutex_;  // Protects clientBuffers_ access
     
@@ -97,6 +111,12 @@ private:
     std::map<QString, std::atomic<bool>> jobCancelled_;
     
     // Threading
+    // jobMutex_ protects jobClients_, jobCancelled_, jobThreads_ maps
+    // Invariant: When locked, job tracking maps are in consistent state
+    // Currently all accesses are from event loop thread, but mutex provides:
+    // - Future-proofing for worker threads (when enabled)
+    // - Defensive programming
+    // - Clear documentation of shared data
     std::map<QString, std::thread> jobThreads_;
     std::mutex jobMutex_;  // Protects jobClients_, jobCancelled_, jobThreads_
     

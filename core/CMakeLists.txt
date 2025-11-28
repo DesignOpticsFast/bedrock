@@ -8,7 +8,8 @@ target_include_directories(bedrock_core
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-target_compile_features(bedrock_core PUBLIC cxx_std_17)
+# C++20 standard is set at top-level CMakeLists.txt
+# No per-target override needed - inherits CMAKE_CXX_STANDARD 20
 
 # Link OpenMP for multithreading support
 target_link_libraries(bedrock_core

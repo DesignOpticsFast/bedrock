@@ -3,7 +3,9 @@
 **Version:** 1.0.0  
 **Last Updated:** 2025-10-20  
 **Language:** C++20  
-**Framework:** Qt 6.10.0 + OpenMP
+**Framework:** OpenMP (Qt optional, see [VERSIONS.md](VERSIONS.md))
+
+> **Note:** For current toolchain versions (C++ standard, CMake, Protobuf, Qt, etc.), see [VERSIONS.md](VERSIONS.md).
 
 ---
 

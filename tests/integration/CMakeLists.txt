@@ -11,6 +11,8 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
         IntegrationTestClient.cpp
         CapabilitiesIntegrationTest.cpp
         XYSineIntegrationTest.cpp
+        ErrorCasesIntegrationTest.cpp
+        EdgeCasesIntegrationTest.cpp
     )
     
     target_link_libraries(integration_tests

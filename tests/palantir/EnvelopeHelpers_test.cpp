@@ -307,5 +307,79 @@ TEST(EnvelopeHelpersTest, RoundTripXYSineResponse) {
     EXPECT_EQ(decoded.status(), "OK");
 }
 
+TEST(EnvelopeHelpersTest, ParseEnvelopeVersionZero) {
+    // Test that version 0 is rejected
+    palantir::MessageEnvelope envelope;
+    envelope.set_version(0); // Invalid version
+    envelope.set_type(palantir::MessageType::CAPABILITIES_REQUEST);
+    envelope.set_payload("test");
+    
+    std::string serialized;
+    ASSERT_TRUE(envelope.SerializeToString(&serialized));
+    
+    palantir::MessageEnvelope parsed;
+    std::string error;
+    
+    EXPECT_FALSE(parseEnvelope(serialized, parsed, &error));
+    EXPECT_FALSE(error.empty());
+    EXPECT_NE(error.find("Invalid protocol version"), std::string::npos);
+}
+
+TEST(EnvelopeHelpersTest, ParseEnvelopeCompletelyMalformed) {
+    // Test with completely random/invalid data
+    std::string malformed = "\x00\x01\x02\x03\xFF\xFE\xFD\xFC";
+    
+    palantir::MessageEnvelope parsed;
+    std::string error;
+    
+    // parseEnvelope should fail on completely malformed data
+    EXPECT_FALSE(parseEnvelope(malformed, parsed, &error));
+    EXPECT_FALSE(error.empty());
+}
+
+TEST(EnvelopeHelpersTest, MetadataRoundTripWithSpecialCharacters) {
+    // Test metadata with special characters and empty values
+    palantir::CapabilitiesRequest request;
+    std::map<std::string, std::string> metadata;
+    metadata["trace_id"] = "abc-123_xyz";
+    metadata["client_version"] = "phoenix-0.0.4";
+    metadata["empty_value"] = "";
+    metadata["special_chars"] = "test@example.com:8080/path?query=value";
+    
+    auto envelope = makeEnvelope(palantir::MessageType::CAPABILITIES_REQUEST, request, metadata);
+    ASSERT_TRUE(envelope.has_value());
+    
+    // Serialize and parse
+    std::string serialized;
+    ASSERT_TRUE(envelope->SerializeToString(&serialized));
+    palantir::MessageEnvelope parsed;
+    ASSERT_TRUE(parseEnvelope(serialized, parsed));
+    
+    // Verify metadata round-trip
+    EXPECT_EQ(parsed.metadata().size(), 4u);
+    EXPECT_EQ(parsed.metadata().at("trace_id"), "abc-123_xyz");
+    EXPECT_EQ(parsed.metadata().at("client_version"), "phoenix-0.0.4");
+    EXPECT_EQ(parsed.metadata().at("empty_value"), "");
+    EXPECT_EQ(parsed.metadata().at("special_chars"), "test@example.com:8080/path?query=value");
+}
+
+TEST(EnvelopeHelpersTest, MetadataRoundTripEmpty) {
+    // Test metadata with empty map
+    palantir::CapabilitiesRequest request;
+    std::map<std::string, std::string> emptyMetadata;
+    
+    auto envelope = makeEnvelope(palantir::MessageType::CAPABILITIES_REQUEST, request, emptyMetadata);
+    ASSERT_TRUE(envelope.has_value());
+    
+    // Serialize and parse
+    std::string serialized;
+    ASSERT_TRUE(envelope->SerializeToString(&serialized));
+    palantir::MessageEnvelope parsed;
+    ASSERT_TRUE(parseEnvelope(serialized, parsed));
+    
+    // Verify metadata is empty
+    EXPECT_EQ(parsed.metadata().size(), 0u);
+}
+
 #endif // BEDROCK_WITH_TRANSPORT_DEPS
 
