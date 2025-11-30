@@ -382,3 +382,19 @@ if(BUILD_WITH_OCCT)
 else()
   message(STATUS "Skipping bedrock_smoke_step test - requires OCCT (use -DBEDROCK_WITH_OPENCASCADE=ON to enable)")
 endif()
+
+# ---------------------------------------
+# Side Quest 1: C++23 Probe Target
+# ---------------------------------------
+add_executable(cpp23_probe experiments/cpp23_probe.cpp)
+target_compile_features(cpp23_probe PRIVATE cxx_std_23)
+
+# Side Quest 1: Simple Job (C++23 vs C++20 comparison)
+add_executable(bedrock_simple_job experiments/simple_job.cpp)
+target_link_libraries(bedrock_simple_job PRIVATE bedrock_engine)
+# We will inherit the global CMAKE_CXX_STANDARD for this one to allow toggling.
+
+# If the global standard is less than 23, this specific target attempts to override it.
+# Note: Some compilers/CMake versions require the global standard to match or exceed if set globally.
+# But `target_compile_features` usually handles the upgrade for the specific target.
+
