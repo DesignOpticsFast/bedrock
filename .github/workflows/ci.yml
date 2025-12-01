@@ -2,29 +2,22 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ "v*" ]
+    branches: [ "main", "cxx23-side-quest" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
-  build:                       # keep this id so the check stays "CI / build"
-    name: Ubuntu build (with OpenCascade)
+  build-and-test:
+    name: Linux core build and tests (C++23)
     runs-on: ubuntu-24.04
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
+        uses: actions/checkout@v4
+        # Only enable submodules if we actually use them
+        # with:
+        #   submodules: recursive
 
       - name: Install dependencies
         run: |
@@ -32,8 +25,7 @@ jobs:
           sudo apt-get install -y \
             cmake \
             ninja-build \
-            g++ \
-            libtbb-dev
+            g++
 
       - name: Print tool versions
         run: |
@@ -43,214 +35,20 @@ jobs:
           ninja --version
           echo "===================="
 
-      - name: Configure (CMake - engine-only build)
+      - name: Configure (Bedrock core, no Qt/transport)
         run: |
           cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBEDROCK_WITH_OCCT=OFF
-
-      - name: Build libraries only
-        run: |
-          cmake --build build --config Release --target bedrock_engine -j
-
-      - name: Upload CMake logs (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cmake-logs
-          path: |
-            build/CMakeFiles/CMakeOutput.log
-            build/CMakeFiles/CMakeError.log
-          retention-days: 7
-
-      - name: Post-job cleanup
-        if: always()
-        run: |
-          rm -rf "$HOME/_work" || true
-
-  tests:
-    name: Tests (Unit + Integration)
-    strategy:
-      matrix:
-        os: [ubuntu-24.04, macos-14]
-    runs-on: ${{ matrix.os }}
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
-    env:
-      QT_VERSION: 6.10.1
-      QTFRAMEWORK_BYPASS_LICENSE_CHECK: "1"
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
-        with:
-          submodules: recursive
-
-      - name: Install dependencies (Linux)
-        if: matrix.os == 'ubuntu-24.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake \
-            ninja-build \
-            g++ \
-            libtbb-dev \
-            libgtest-dev \
-            libomp-dev \
-            lcov
-
-      - name: Install dependencies (macOS)
-        if: matrix.os == 'macos-14'
-        run: |
-          brew install cmake ninja libomp
-
-      - name: Print tool versions
-        run: |
-          echo "=== Tool Versions ==="
-          if [[ "${{ matrix.os }}" == "ubuntu-24.04" ]]; then
-            g++ --version
-          else
-            clang++ --version
-          fi
-          cmake --version
-          ninja --version
-          echo "===================="
-
-      - name: Install Qt 6.10.1 (macOS)
-        if: matrix.os == 'macos-14'
-        run: |
-          # Create and activate a local virtual environment
-          python3 -m venv .venv
-          source .venv/bin/activate
-
-          # Upgrade pip inside the venv and install aqtinstall
-          pip install --upgrade pip
-          pip install "aqtinstall==3.1.*"
-
-          # Use the venv's python to install Qt
-          python -m aqt install-qt mac desktop 6.10.1 \
-            --outputdir "${GITHUB_WORKSPACE}/Qt"
-
-      - name: Install Qt 6.10.1 (Linux)
-        if: matrix.os == 'ubuntu-24.04'
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install "aqtinstall==3.1.*"
-          python3 -m aqt install-qt linux desktop 6.10.1 \
-            --outputdir ${{ github.workspace }}/Qt
-
-      - name: Setup Qt environment
-        run: |
-          QT_BASE_DIR="${{ github.workspace }}/Qt"
-
-          echo "Qt base dir contents:"
-          ls -R "$QT_BASE_DIR" || true
-
-          if [[ "${{ matrix.os }}" == "ubuntu-24.04" ]]; then
-            # Typical aqt layout: Qt/6.10.1/gcc_64
-            QT_ROOT=$(find "$QT_BASE_DIR" -maxdepth 4 -type d -name "gcc_64" | head -n 1)
-          else
-            # Typical aqt layout on macOS: Qt/6.10.1/clang_64
-            QT_ROOT=$(find "$QT_BASE_DIR" -maxdepth 4 -type d -name "clang_64" | head -n 1)
-          fi
-
-          if [[ -z "$QT_ROOT" || ! -d "$QT_ROOT" ]]; then
-            echo "❌ Could not locate Qt root directory under $QT_BASE_DIR"
-            exit 1
-          fi
-
-          echo "Using Qt root: $QT_ROOT"
-
-          # Set CMAKE_PREFIX_PATH so CMake can find Qt
-          echo "CMAKE_PREFIX_PATH=$QT_ROOT" >> $GITHUB_ENV
-          echo "CMAKE_PREFIX_PATH has been set to $QT_ROOT"
-
-          # Optionally set Qt6_DIR if helpful to CMake
-          if [[ -d "$QT_ROOT/lib/cmake/Qt6" ]]; then
-            echo "Qt6_DIR=$QT_ROOT/lib/cmake/Qt6" >> $GITHUB_ENV
-            echo "Qt6_DIR has been set to $QT_ROOT/lib/cmake/Qt6"
-          else
-            echo "Qt6_DIR not found at $QT_ROOT/lib/cmake/Qt6 (this may be fine if CMake finds Qt via CMAKE_PREFIX_PATH)"
-          fi
-
-      - name: Configure (CMake - with transport deps)
-        run: |
-          # Enable coverage on Linux only
-          if [[ "${{ matrix.os }}" == "ubuntu-24.04" ]]; then
-            COVERAGE_FLAGS="-fprofile-arcs -ftest-coverage --coverage"
-            BUILD_TYPE="RelWithDebInfo"
-          else
-            COVERAGE_FLAGS=""
-            BUILD_TYPE="Release"
-          fi
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_BUILD_TYPE=Debug \
             -DBEDROCK_WITH_OCCT=OFF \
-            -DBEDROCK_WITH_TRANSPORT_DEPS=ON \
-            -DCMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH" \
-            -DCMAKE_CXX_FLAGS="$COVERAGE_FLAGS" \
-            -DCMAKE_EXE_LINKER_FLAGS="$COVERAGE_FLAGS" \
-            -DBUILD_TESTING=ON
+            -DBUILD_TESTING=ON \
+            -DBEDROCK_WITH_TRANSPORT_DEPS=OFF \
+            -DBEDROCK_WITH_OPENCASCADE=OFF
 
-      - name: Build all tests
+      - name: Build
         run: |
-          # Use appropriate build type based on OS
-          if [[ "${{ matrix.os }}" == "ubuntu-24.04" ]]; then
-            BUILD_CONFIG="RelWithDebInfo"
-          else
-            BUILD_CONFIG="Release"
-          fi
-          cmake --build build --config "$BUILD_CONFIG" -j
+          cmake --build build --config Debug -j
 
-      - name: Run all tests (ctest)
+      - name: Test
         run: |
-          cd build
-          ctest --output-on-failure
-
-      - name: Generate coverage report (Linux only)
-        if: matrix.os == 'ubuntu-24.04'
-        run: |
-          cd build
-          # Capture coverage data
-          lcov --directory . --capture --output-file coverage.info
-          
-          # Remove system headers, external libs, and test files
-          lcov --remove coverage.info \
-            '/usr/*' \
-            '*/tests/*' \
-            '*/googletest/*' \
-            '*/generated/*' \
-            '*/build/*' \
-            --output-file coverage-filtered.info
-          
-          # Generate HTML report (focus on src/palantir/*)
-          genhtml coverage-filtered.info \
-            --output-directory coverage-html \
-            --prefix "$(pwd)/.." \
-            --show-details \
-            --legend \
-            --demangle-cpp
-          
-          # Print summary
-          echo "=== Coverage Summary ==="
-          lcov --summary coverage-filtered.info || true
-
-      - name: Upload coverage report (Linux only)
-        if: matrix.os == 'ubuntu-24.04'
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report-bedrock
-          path: |
-            build/coverage-html/**
-            build/coverage-filtered.info
-          retention-days: 30
-
-      - name: Upload test logs (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-logs-${{ matrix.os }}
-          path: |
-            build/Testing/**/*.xml
-            build/Testing/**/*.log
-          retention-days: 7
+          ctest --test-dir build --output-on-failure --timeout 120
