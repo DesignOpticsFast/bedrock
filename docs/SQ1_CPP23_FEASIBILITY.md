@@ -39,7 +39,7 @@ This investigation distinguishes between **Hard Blockers** (must fix environment
 | Environment | Platform | Compiler & Version | Stdlib Version | C++23 Support Status |
 | :--- | :--- | :--- | :--- | :--- |
 | **Crucible** | macOS 25.1.0 (Apple Silicon) | Apple Clang 17.0.0 (clang-1700.4.4.1) | Apple Libc++ | ✅ Full |
-| **CI Linux** | Ubuntu 24.04 (Noble) | GCC 13.2.0 | libstdc++ 13 | ✅ Full |
+| **CI Linux** | Ubuntu 24.04 (Noble) | GCC 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04) | libstdc++ 13 | ✅ Full |
 | **CI macOS** | macOS 14 (Sonoma) | Apple Clang 15.0.0 (clang-1500.3.9.4) | Apple Libc++ | ✅ Full |
 | **CI Windows** | Windows | *Not explicitly tested in this loop, but feasible via MSVC 2022* | MSVC STL | ⚠️ Inferred (Low Risk) |
 | **Deepthought** | Windows | *Pending Sysinfo* | *Pending* | ⚠️ Inferred (Low Risk) |
@@ -84,11 +84,11 @@ A minimal executable testing: `std::expected`, `std::ranges`, `if consteval`, `s
 
 *   **CI Linux (Ubuntu 24.04):**
     *   Build: ✅ **Success**
-    *   Tests: ✅ **Pass** (All tests passed).
+    *   Tests: ✅ **Pass** (All tests passed under C++23 with Qt 6.10.1).
 
 *   **CI macOS (macOS 14):**
     *   Build: ✅ **Success**
-    *   Tests: ✅ **Pass** (All tests passed).
+    *   Tests: ✅ **Pass** (All tests passed under C++23 with Qt 6.10.1).
 
 ---
 
@@ -105,11 +105,8 @@ A minimal executable testing: `std::expected`, `std::ranges`, `if consteval`, `s
 
 ---
 
-## 7. Recommendations & Next Steps
+## 7. Conclusion
 
-1.  **Merge Side Quest:** The `cxx23-side-quest` branch is stable and validates the path forward.
-2.  **Upgrade CI Config:** Apply the CI changes (runner upgrades, `aqt` usage, `venv` fix) to `main`.
-3.  **Execute Upgrade:** Schedule the formal C++23 migration sprint for Bedrock.
-4.  **Decommission Legacy CI:** Remove reliance on `dev01` self-hosted runners for standard PR checks.
+The C++23 Side Quest is feature-complete and CI-validated. Bedrock successfully builds and tests under C++23 on macOS (local + CI) and Linux (CI) using modern toolchains (GCC 13+, Apple Clang 15+). No blockers were found.
 
 **Side Quest Status: CLOSED**
