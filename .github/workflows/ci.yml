@@ -15,7 +15,7 @@ permissions:
 jobs:
   build:                       # keep this id so the check stays "CI / build"
     name: Ubuntu build (with OpenCascade)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
@@ -35,12 +35,6 @@ jobs:
             g++ \
             libtbb-dev
 
-      - name: Configure (CMake - engine-only build)
-        run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBEDROCK_WITH_OCCT=OFF
-
       - name: Print tool versions
         run: |
           echo "=== Tool Versions ==="
@@ -48,6 +42,12 @@ jobs:
           cmake --version
           ninja --version
           echo "===================="
+
+      - name: Configure (CMake - engine-only build)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBEDROCK_WITH_OCCT=OFF
 
       - name: Build libraries only
         run: |
@@ -72,7 +72,7 @@ jobs:
     name: Tests (Unit + Integration)
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-14]
     runs-on: ${{ matrix.os }}
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
@@ -87,7 +87,7 @@ jobs:
           submodules: recursive
 
       - name: Install dependencies (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -100,9 +100,21 @@ jobs:
             lcov
 
       - name: Install dependencies (macOS)
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-14'
         run: |
           brew install cmake ninja libomp
+
+      - name: Print tool versions
+        run: |
+          echo "=== Tool Versions ==="
+          if [[ "${{ matrix.os }}" == "ubuntu-24.04" ]]; then
+            g++ --version
+          else
+            clang++ --version
+          fi
+          cmake --version
+          ninja --version
+          echo "===================="
 
       - name: Install Qt 6.10.1
         uses: jurplel/install-qt-action@v3
@@ -124,7 +136,7 @@ jobs:
       - name: Configure (CMake - with transport deps)
         run: |
           # Enable coverage on Linux only
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+          if [[ "${{ matrix.os }}" == "ubuntu-24.04" ]]; then
             COVERAGE_FLAGS="-fprofile-arcs -ftest-coverage --coverage"
             BUILD_TYPE="RelWithDebInfo"
           else
@@ -143,7 +155,7 @@ jobs:
       - name: Build all tests
         run: |
           # Use appropriate build type based on OS
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+          if [[ "${{ matrix.os }}" == "ubuntu-24.04" ]]; then
             BUILD_CONFIG="RelWithDebInfo"
           else
             BUILD_CONFIG="Release"
@@ -156,7 +168,7 @@ jobs:
           ctest --output-on-failure
 
       - name: Generate coverage report (Linux only)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         run: |
           cd build
           # Capture coverage data
@@ -184,7 +196,7 @@ jobs:
           lcov --summary coverage-filtered.info || true
 
       - name: Upload coverage report (Linux only)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-24.04'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report-bedrock
