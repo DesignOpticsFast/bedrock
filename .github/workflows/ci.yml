@@ -116,7 +116,16 @@ jobs:
           ninja --version
           echo "===================="
 
-      - name: Install Qt 6.10.1
+      - name: Install Qt 6.10.1 (macOS)
+        if: matrix.os == 'macos-14'
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install "aqtinstall==3.1.*"
+          python3 -m aqt install-qt mac desktop 6.10.1 \
+            --outputdir ${{ github.workspace }}/Qt
+
+      - name: Install Qt 6.10.1 (Linux)
+        if: matrix.os == 'ubuntu-24.04'
         uses: jurplel/install-qt-action@v3
         with:
           version: '6.10.1'
