@@ -134,23 +134,37 @@ jobs:
 
       - name: Setup Qt environment
         run: |
+          QT_BASE_DIR="${{ github.workspace }}/Qt"
+
+          echo "Qt base dir contents:"
+          ls -R "$QT_BASE_DIR" || true
+
           if [[ "${{ matrix.os }}" == "ubuntu-24.04" ]]; then
-            QT_ROOT="${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/gcc_64"
+            # Typical aqt layout: Qt/6.10.1/gcc_64
+            QT_ROOT=$(find "$QT_BASE_DIR" -maxdepth 4 -type d -name "gcc_64" | head -n 1)
           else
-            QT_ROOT="${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/macos"
+            # Typical aqt layout on macOS: Qt/6.10.1/clang_64
+            QT_ROOT=$(find "$QT_BASE_DIR" -maxdepth 4 -type d -name "clang_64" | head -n 1)
           fi
 
-          if [[ ! -d "$QT_ROOT" ]]; then
-            echo "❌ Qt root directory not found: $QT_ROOT"
-            ls -R "${{ github.workspace }}/Qt" || true
+          if [[ -z "$QT_ROOT" || ! -d "$QT_ROOT" ]]; then
+            echo "❌ Could not locate Qt root directory under $QT_BASE_DIR"
             exit 1
           fi
 
           echo "Using Qt root: $QT_ROOT"
 
-          # This is what CMake needs
+          # Set CMAKE_PREFIX_PATH so CMake can find Qt
           echo "CMAKE_PREFIX_PATH=$QT_ROOT" >> $GITHUB_ENV
           echo "CMAKE_PREFIX_PATH has been set to $QT_ROOT"
+
+          # Optionally set Qt6_DIR if helpful to CMake
+          if [[ -d "$QT_ROOT/lib/cmake/Qt6" ]]; then
+            echo "Qt6_DIR=$QT_ROOT/lib/cmake/Qt6" >> $GITHUB_ENV
+            echo "Qt6_DIR has been set to $QT_ROOT/lib/cmake/Qt6"
+          else
+            echo "Qt6_DIR not found at $QT_ROOT/lib/cmake/Qt6 (this may be fine if CMake finds Qt via CMAKE_PREFIX_PATH)"
+          fi
 
       - name: Configure (CMake - with transport deps)
         run: |
