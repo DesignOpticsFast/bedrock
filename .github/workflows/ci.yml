@@ -134,13 +134,23 @@ jobs:
 
       - name: Setup Qt environment
         run: |
-          if [[ -z "$Qt6_DIR" ]]; then
-            echo "❌ Qt6_DIR not set by install-qt-action"
+          if [[ "${{ matrix.os }}" == "ubuntu-24.04" ]]; then
+            QT_ROOT="${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/gcc_64"
+          else
+            QT_ROOT="${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/macos"
+          fi
+
+          if [[ ! -d "$QT_ROOT" ]]; then
+            echo "❌ Qt root directory not found: $QT_ROOT"
+            ls -R "${{ github.workspace }}/Qt" || true
             exit 1
           fi
-          CMAKE_PREFIX_PATH=$(dirname "$Qt6_DIR")
-          echo "CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH" >> $GITHUB_ENV
-          echo "Using CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH"
+
+          echo "Using Qt root: $QT_ROOT"
+
+          # This is what CMake needs
+          echo "CMAKE_PREFIX_PATH=$QT_ROOT" >> $GITHUB_ENV
+          echo "CMAKE_PREFIX_PATH has been set to $QT_ROOT"
 
       - name: Configure (CMake - with transport deps)
         run: |
