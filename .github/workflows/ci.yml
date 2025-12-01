@@ -119,10 +119,17 @@ jobs:
       - name: Install Qt 6.10.1 (macOS)
         if: matrix.os == 'macos-14'
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install "aqtinstall==3.1.*"
-          python3 -m aqt install-qt mac desktop 6.10.1 \
-            --outputdir ${{ github.workspace }}/Qt
+          # Create and activate a local virtual environment
+          python3 -m venv .venv
+          source .venv/bin/activate
+
+          # Upgrade pip inside the venv and install aqtinstall
+          pip install --upgrade pip
+          pip install "aqtinstall==3.1.*"
+
+          # Use the venv's python to install Qt
+          python -m aqt install-qt mac desktop 6.10.1 \
+            --outputdir "${GITHUB_WORKSPACE}/Qt"
 
       - name: Install Qt 6.10.1 (Linux)
         if: matrix.os == 'ubuntu-24.04'
