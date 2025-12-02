@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(Bedrock
-  VERSION 0.0.1
+  VERSION 0.3.0
   DESCRIPTION "AI-native optical design core"
   LANGUAGES CXX)
 
@@ -24,6 +24,21 @@ option(BEDROCK_WITH_TRANSPORT_DEPS "Enable Palantir/transport deps" OFF)
 # ---------------------------------------
 # OpenMP for multithreading
 # ---------------------------------------
+# ---------------------------------------------
+# macOS OpenMP fallback (AppleClang + Homebrew)
+# ---------------------------------------------
+if(APPLE AND NOT DEFINED OpenMP_CXX_FLAGS)
+    if(EXISTS "/opt/homebrew/opt/libomp")
+        # Apple Silicon (M1/M2/M3)
+        set(OpenMP_CXX_FLAGS "-Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include" CACHE STRING "OpenMP C++ compiler flags")
+        set(OpenMP_CXX_LIB_NAMES "omp" CACHE STRING "OpenMP library name")
+        set(OpenMP_omp_LIBRARY "/opt/homebrew/opt/libomp/lib/libomp.dylib" CACHE FILEPATH "Path to OpenMP library")
+        message(STATUS "Bedrock: Auto-detected Homebrew libomp at /opt/homebrew")
+    else()
+        message(WARNING "Bedrock: libomp not found. Install with: brew install libomp")
+    endif()
+endif()
+
 find_package(OpenMP REQUIRED)
 if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
@@ -56,17 +71,20 @@ target_include_directories(bedrock_som
 # ---------------------------------------
 # Sprint 1: OpenCascade + geom target
 # ---------------------------------------
+# OpenCASCADE is optional - set BEDROCK_WITH_OPENCASCADE=ON to enable
 # Homebrew installs OCCT at /opt/homebrew/opt/opencascade
 # Ensure your environment has:
 #   export CMAKE_PREFIX_PATH="/opt/homebrew/opt/opencascade:${CMAKE_PREFIX_PATH}"
 #   export OpenCASCADE_DIR="/opt/homebrew/opt/opencascade/lib/cmake/opencascade-7.9.1"
-option(BEDROCK_WITH_OCCT "Build Bedrock OCCT components" ON)
+option(BEDROCK_WITH_OPENCASCADE "Enable OpenCASCADE geometry backend" OFF)
+option(BEDROCK_WITH_OCCT "Build Bedrock OCCT components" OFF)  # Legacy alias, deprecated
 
-if(BEDROCK_WITH_OCCT)
+# Support both option names for backward compatibility
+if(BEDROCK_WITH_OPENCASCADE OR BEDROCK_WITH_OCCT)
   find_package(OpenCASCADE REQUIRED)
   set(BUILD_WITH_OCCT ON)
 else()
-  message(STATUS "Building Bedrock without OCCT support")
+  message(STATUS "Building Bedrock without OCCT support (use -DBEDROCK_WITH_OPENCASCADE=ON to enable)")
   set(BUILD_WITH_OCCT OFF)
 endif()
 
@@ -102,7 +120,8 @@ target_include_directories(bedrock_engine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 target_link_libraries(bedrock_engine PUBLIC
-  bedrock_geom)  # brings in OCCT + bedrock_som
+  bedrock_som
+  $<$<BOOL:${BUILD_WITH_OCCT}>:bedrock_geom>)  # Conditionally link OCCT if available
 
 # ---------------------------------------
 # Plugin interface for external consumers (like Phoenix)
@@ -355,5 +374,34 @@ if(BEDROCK_WITH_TRANSPORT_DEPS)
 endif()
 
 # --- Sprint 1: smoke (manual run)
-add_executable(bedrock_smoke_step tests/smoke_step_main.cpp)
-target_link_libraries(bedrock_smoke_step PRIVATE bedrock_engine)
+# smoke_step test requires OCCT
+if(BUILD_WITH_OCCT)
+  add_executable(bedrock_smoke_step tests/smoke_step_main.cpp)
+  target_link_libraries(bedrock_smoke_step PRIVATE bedrock_engine)
+  add_test(NAME bedrock_smoke_step COMMAND bedrock_smoke_step)
+else()
+  message(STATUS "Skipping bedrock_smoke_step test - requires OCCT (use -DBEDROCK_WITH_OPENCASCADE=ON to enable)")
+endif()
+
+# ---------------------------------------
+# Side Quest 1: C++23 Probe Target
+# ---------------------------------------
+add_executable(cpp23_probe experiments/cpp23_probe.cpp)
+target_compile_features(cpp23_probe PRIVATE cxx_std_23)
+
+# Side Quest 1: Simple Job (C++23 vs C++20 comparison)
+# Simple job links against engine, which might link against geom (OCCT).
+# If OCCT is ON, simple_job.cpp's stub for WriteTSEasSTEP conflicts with the real one in geom.
+# To avoid ODR violations, only build simple_job when OCCT is OFF.
+if(NOT BUILD_WITH_OCCT)
+  add_executable(bedrock_simple_job experiments/simple_job.cpp)
+  target_link_libraries(bedrock_simple_job PRIVATE bedrock_engine)
+  # We will inherit the global CMAKE_CXX_STANDARD for this one to allow toggling.
+else()
+  message(STATUS "Skipping bedrock_simple_job - incompatible with OCCT enabled (ODR check)")
+endif()
+
+# If the global standard is less than 23, this specific target attempts to override it.
+# Note: Some compilers/CMake versions require the global standard to match or exceed if set globally.
+# But `target_compile_features` usually handles the upgrade for the specific target.
+

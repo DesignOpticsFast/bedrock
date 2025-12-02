@@ -1,8 +1,8 @@
-Developer Environment Setup — Amazon Linux 2023 + Qt 6.10.0
+Developer Environment Setup — Amazon Linux 2023
 
 This guide provides complete steps for setting up a development environment for Phoenix/Bedrock/Rosetta. It covers installing prerequisites, downloading Qt from S3, verifying integrity, configuring environment variables, and running a smoke test build.
 
-> ⚠️ **Updated for Phase 0.5 Gate PASS (2025-10-18): Qt 6.10.0 + Qt Graphs / gRPC UDS foundation.**
+> ⚠️ **For current toolchain versions (Qt, C++ standard, CMake, Protobuf, etc.), see [VERSIONS.md](VERSIONS.md).**
 
 ⸻
 
@@ -32,6 +32,8 @@ aws --version
 1) Download Qt tarball + SHA256 from S3
 
 Artifacts are versioned and stored with a checksum file.
+
+> **Note:** For the current Qt version, see [VERSIONS.md](VERSIONS.md). The example below uses Qt 6.10.0; adjust paths and version numbers as needed.
 
 aws s3 cp s3://phoenix-dev-artifacts-us-east-2-mn/artifacts/6.10.0/Qt-6.10.0-gcc_64.tgz /tmp/
 aws s3 cp s3://phoenix-dev-artifacts-us-east-2-mn/artifacts/6.10.0/Qt-6.10.0-gcc_64.sha256 /tmp/
@@ -94,10 +96,10 @@ Run a minimal Qt build to verify toolchain + environment.
 mkdir -p ~/qt-smoke && cd ~/qt-smoke
 
 cat > CMakeLists.txt <<'EOF'
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.20)
 project(QtSmoke LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
-find_package(Qt6 6.5 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
 add_executable(qt_smoke main.cpp)
 target_link_libraries(qt_smoke PRIVATE Qt6::Widgets)
 EOF

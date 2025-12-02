@@ -5,7 +5,7 @@
 [![PR Guard](https://github.com/DesignOpticsFast/bedrock/actions/workflows/pr-guard.yml/badge.svg)](https://github.com/DesignOpticsFast/bedrock/actions/workflows/pr-guard.yml)
 [![Auto-merge Dependabot](https://github.com/DesignOpticsFast/bedrock/actions/workflows/auto-merge-dependabot.yml/badge.svg)](https://github.com/DesignOpticsFast/bedrock/actions/workflows/auto-merge-dependabot.yml)
 
-📋 **[Workflow Dependencies](docs/workflow-dependencies.md)** | 🔧 **[Development Setup](docs/dev-setup.md)** | 📚 **[API Documentation](docs/engine-api.md)**
+📋 **[Workflow Dependencies](docs/workflow-dependencies.md)** | 🔧 **[Development Setup](docs/dev-setup.md)** | 📚 **[API Documentation](docs/engine-api.md)** | 🏗️ **[Architecture](docs/BEDROCK_ARCHITECTURE.md)** | 🧵 **[Threading](docs/THREADING.md)**
 
 **Bedrock** is the headless, computationally efficient core of the Phoenix platform.  
 It owns the **System Object Model (.SOM)**, performs all calculations, and provides
@@ -16,39 +16,65 @@ and future AI-assisted workflows.
 
 ---
 
-## 🚀 Current Scope (Sprint 4 - Phase 0.5 Gate PASS)
+## 🚀 Current Scope (Sprint 4.5)
 
-**Status:** ✅ **Phase 0.5 Gate PASSED** (2025-10-18)  
-**Foundation:** Qt 6.10.0 + Qt Graphs / gRPC UDS transport
+**Status:** ✅ **Sprint 4.5 Complete** (2025-01-26)  
+**Foundation:** C++20, LocalSocket + Protobuf (envelope-based Palantir protocol)
 
-### Phase 0.5 Gate Results
-- **Graphics:** Qt Graphs 6.10.0 - 50 windows < 5% CPU, < 100 MB RAM per window, 35 FPS for 10k points
-- **Transport:** gRPC UDS - 2.04% overhead vs LocalSocket, 45 MB footprint
-- **Status:** Foundation validated and ready for Phase 1/2 development
+> **Note:** For current toolchain versions, see [docs/VERSIONS.md](docs/VERSIONS.md).
 
-### Current Implementation
-- **Palantir Server:** LocalSocket + Protobuf (needs gRPC migration)
+### Current Implementation (Sprint 4.5)
+
+**Transport:**
+- **Palantir Server:** LocalSocket + Protobuf with envelope-based protocol
+- **Protocol:** `MessageEnvelope` with `[4-byte length][serialized MessageEnvelope]`
+- **RPCs:** Capabilities, XY Sine
+- **Error Handling:** Standardized error codes and responses
+
+**Compute:**
 - **Engine API:** Core computation primitives
+- **XY Sine:** Synchronous computation (runs on event loop thread)
+- **OpenMP:** Infrastructure present for future parallelization
+
+**Data Model:**
 - **SOM v0:** System Object Model with Two-Surface Element (TSE)
-- **STEP Export:** OpenCascade integration for CAD export
-- **OpenMP Multithreading:** High-performance parallel computation with automatic optimization
+- **Surface Definitions:** Basic optical surface structures
+- **Material Properties:** Material definitions
+
+**Geometry:**
+- **OpenCascade:** Build infrastructure exists (integration planned)
+- **STEP Export:** Planned for future sprints
+
+### Planned Enhancements
+
+**Transport:**
+- **gRPC:** Validated in Gate 0.5, not yet integrated (planned)
+- **Arrow Flight:** High-performance data transfer (planned)
+
+**Compute:**
+- **Ray Tracing:** Optical ray tracing engine (planned)
+- **Wave Optics:** Wavefront calculations (planned)
+- **Tolerancing:** Statistical analysis (planned)
+
+**Geometry:**
+- **OpenCascade Integration:** Full OCCT integration (planned)
+- **STEP Export:** CAD file export (planned)
+
+> **Note:** For detailed implementation status, see [docs/palantir/IMPLEMENTATION_STATUS.md](docs/palantir/IMPLEMENTATION_STATUS.md).
 
 ---
 
-## 📂 Repo Layout (early)
-bedrock/
-├── include/bedrock/          # Public C++ headers
-│    ├── engine.hpp           # Engine API
-│    ├── som/types.hpp        # SOM v0 types
-│    ├── geom/step_export.hpp # STEP export
-│    └── threading.hpp        # OpenMP multithreading utilities
-├── src/
-│    ├── engine/              # Engine implementation
-│    ├── geom/                # STEP export implementation
-│    └── threading.cpp        # OpenMP implementation
-├── proto/                    # .SOM schema (protobuf)
-├── tests/                    # Unit + CI smoke tests
-└── docs/                     # ADRs, specs, design notes
+## 📂 Repository Structure
+
+**Key Directories:**
+- **`include/bedrock/`** - Public C++ headers (Engine API, SOM, geometry)
+- **`src/`** - Implementation (engine, palantir transport, geometry)
+- **`core/`** - Core utilities (threading, math)
+- **`som/`** - System Object Model definitions
+- **`tests/`** - Unit and integration tests
+- **`docs/`** - Documentation (architecture, build, testing, etc.)
+
+> **Note:** For detailed repository structure, see [docs/REPOSITORY_STRUCTURE.md](docs/REPOSITORY_STRUCTURE.md).
 
 ---
 
@@ -94,7 +120,7 @@ We welcome early feedback and proposals:
 
 Apache License 2.0 © Design Optics Fast LLC
 # Trigger validation with infra-ci label
-# Test commit for dev-01 runner
+# CI runs on GitHub Actions with integration tests
 # Another test commit
 # Test sudo fix
 # Final Sprint 3 validation

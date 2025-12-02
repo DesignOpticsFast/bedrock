@@ -2,27 +2,26 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
-    tags: [ "v*" ]
+    branches: [ "main", "cxx23-side-quest" ]
   pull_request:
     branches: [ "main" ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
-  build:                       # keep this id so the check stays "CI / build"
-    name: Ubuntu build (with OpenCascade)
-    runs-on: ubuntu-latest
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
+  build-and-test:
+    name: Linux core build and tests (C++23)
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repo
+<<<<<<< HEAD
+        uses: actions/checkout@v4
+        # Only enable submodules if we actually use them
+        # with:
+        #   submodules: recursive
+=======
         uses: actions/checkout@v6
+>>>>>>> origin/main
 
       - name: Install dependencies
         run: |
@@ -30,14 +29,7 @@ jobs:
           sudo apt-get install -y \
             cmake \
             ninja-build \
-            g++ \
-            libtbb-dev
-
-      - name: Configure (CMake - engine-only build)
-        run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBEDROCK_WITH_OCCT=OFF
+            g++
 
       - name: Print tool versions
         run: |
@@ -47,10 +39,19 @@ jobs:
           ninja --version
           echo "===================="
 
-      - name: Build libraries only
+      - name: Configure (Bedrock core, no Qt/transport)
         run: |
-          cmake --build build --config Release --target bedrock_engine -j
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_CXX_STANDARD=23 \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DBEDROCK_WITH_OCCT=OFF \
+            -DBUILD_TESTING=ON \
+            -DBEDROCK_WITH_TRANSPORT_DEPS=OFF \
+            -DBEDROCK_WITH_OPENCASCADE=OFF
 
+<<<<<<< HEAD
+      - name: Build
+=======
       - name: Upload CMake logs (on failure)
         if: failure()
         uses: actions/upload-artifact@v5
@@ -63,5 +64,10 @@ jobs:
 
       - name: Post-job cleanup
         if: always()
+>>>>>>> origin/main
         run: |
-          rm -rf "$HOME/_work" || true
+          cmake --build build --config Debug -j
+
+      - name: Test
+        run: |
+          ctest --test-dir build --output-on-failure --timeout 120
