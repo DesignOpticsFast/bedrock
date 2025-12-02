@@ -105,4 +105,6 @@ bin/
 coverage/
 
 # Optional: ignore Phoenix sub-builds if they appear inside Bedrock
+# Ignore Phoenix sub-builds if they appear inside Bedrock
+_phoenix_build/
 _phoenix_build/CMakeUserPresets.json
