@@ -1,3 +1,12 @@
+> ⚠️ **Archived Repository (Read-Only)**
+>
+> This repository is no longer under active development.
+>
+> All active development has moved to the monorepo:
+> **https://github.com/DesignOpticsFast/suite**
+>
+> The pre-migration baseline corresponds to tag **`sprint-4.6A`** in the monorepo.
+
 # Bedrock — AI-Native Optical Design Core Toolkit
 
 [![CI](https://github.com/DesignOpticsFast/bedrock/actions/workflows/ci.yml/badge.svg)](https://github.com/DesignOpticsFast/bedrock/actions/workflows/ci.yml)
